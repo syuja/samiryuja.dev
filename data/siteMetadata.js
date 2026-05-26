@@ -10,7 +10,7 @@ const siteMetadata = {
   siteRepo: 'https://github.com/syuja/samiryuja.dev',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
   socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.png`,
-  email: 'address@yoursite.com',
+  email: 'samir@samiryuja.dev',
   github: 'https://github.com/syuja',
   linkedin: 'https://www.linkedin.com/in/samir-j-yuja/',
   locale: 'en-US',
