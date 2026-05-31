@@ -1,0 +1,103 @@
+---
+title: 'Futbol Report — building a multi-model LLM comparison on AWS Lambda'
+date: '2026-05-31'
+tags: ['llm', 'aws', 'eval', 'side-project', 'serverless']
+draft: true
+summary: 'A scheduled pipeline that sends the same soccer-news prompt to four frontier models and shows their outputs side by side, with live voting. What I built, what I learned from running it, and the AWS deployment debugging in between.'
+---
+
+For about a year I've been getting a soccer digest sent to me on Telegram every few days — fixtures, results, transfer news, manager changes. It started as a `tmux` session running Claude Code on a small VPS, fired by a cron job. It worked. It also went down occasionally, and I had no good way to inspect what it was producing.
+
+I wanted to do two things at once: make it more reliable, and turn it into something more interesting than "one bot sending one report." The result is [Futbol Report](https://samiryuja.dev/projects/futbol-report) — a scheduled job on AWS that sends the _same prompt and search context_ to four different language models (Claude, Kimi, Qwen, Gemma) every three days, stores all four reports in Redis, and renders them side-by-side on this site with live voting.
+
+This post is about how it works, what I learned from running it, and the deployment war stories — the bits that are usually edited out of "here's my side project" writeups.
+
+## What the comparison actually shows
+
+Same input, four models, no editing. The page has a dropdown to switch between past runs and a vote button under each report so visitors can pick the one they think is best. Vote tallies persist.
+
+The point isn't to crown a "best" model. It's to make model differences visible on a _real, repeated task_. Placed next to each other, the models diverge in ways that are easy to see — how faithfully they follow the requested format, what they choose to include or filter out, and how aggressively they compress.
+
+## How the pipeline works
+
+```
+EventBridge Scheduler  (every 3 days)
+        ↓
+   AWS Lambda  (Python 3.12)
+        ├── Brave Search    (~13 queries: fixtures, results, transfers, manager changes)
+        └── OpenRouter      (same context → 4 models)
+        ↓
+   Redis  (Vercel, volatile-lru + TTL on reports)
+        ↓
+   Next.js page  (server-rendered comparison + voting)
+```
+
+Every three days EventBridge fires a Lambda function. The Lambda calls Brave Search with about a dozen queries — fixtures, results, transfer news, manager changes — then sends the same compiled context to four models through OpenRouter. Each model's report goes into Redis under a timestamped key. The Next.js site, deployed on Vercel, reads from the same Redis and renders the comparison page on every request.
+
+A few decisions worth surfacing:
+
+**OpenRouter as the inference layer.** I could have integrated each provider's SDK directly. The interesting story here is the comparison, not SDK plumbing — a single inference broker means adding or swapping a model is a one-line change. If you ever ask me how I'd harden this for production, my answer is "direct SDKs with per-provider retry behavior" — but for what this project is, broker is correct.
+
+**Server-rendered comparison page.** The Next.js App Router supports both server components and client-side fetching. Server-rendered won because the data changes a few times a day, not on user interaction. The Redis URL stays on the server, the page never has a loading state, and there's less code. The vote button is the one client component, scoped narrowly to the interactive bit.
+
+**Redis with `volatile-lru` and a 90-day TTL on report keys.** If memory ever fills, only old reports can be evicted — voting history and the run index are protected because they have no TTL. Costs nothing to set up and prevents an entire class of "where did my data go" failure.
+
+## What I learned from running it
+
+After a few weeks of runs, six things stood out:
+
+**1. Search results are non-deterministic.** Running the same query thirty minutes apart returned meaningfully different result sets. This isn't a Brave-specific thing — it's how live ranking works. For evals: context has to be cached _within_ a run (it is — one Brave call feeds all four models), but rerunning the prompt later won't reproduce the result. If you're evaluating models, hold the input fixed.
+
+**2. A simple anti-hallucination clause generalized across model families.** I added "use ONLY facts present in the provided search results" at the top of the prompt after the first run hallucinated fixtures _and_ lifted an example injury verbatim out of the prompt itself. The same clause stopped all four models from inventing data — Anthropic, Moonshot, Alibaba, Google. Prompt-level guardrails travel across labs more than I expected.
+
+**3. Models filter context differently.** One run, Brave's results included an Indian Super League match that wasn't in the priority list I'd specified. Three models filtered it out; Kimi led its report with it. Same prompt, same data, different prioritization — exactly the kind of thing a side-by-side comparison is built to surface.
+
+**4. Compression varies wildly with model size.** Claude and Kimi used most of the available context. Gemma — by far the cheapest model in the lineup — compressed hardest, often collapsing the day-by-day breakdown into a single line. Cost and output density are correlated in ways you can see.
+
+**5. Format adherence is its own axis.** Across runs, Claude followed the structured prompt format most faithfully. Gemma dropped most of the conventions. Qwen and Kimi were in between, each in different ways — Kimi sometimes added section headers I didn't ask for.
+
+**6. The pipeline survived a seasonal pivot without code changes.** Serie A ended mid-project. Fixture queries started returning nothing useful. I added two new search categories (transfers, manager changes) and one line to the prompt: _"if fixtures are sparse, lead with transfer news and managerial changes."_ That was the entire change. Reports stayed substantive through the off-season — the Allegri sacking at Milan, Guardiola stepping down at City, World Cup buildup. _Let the data lead_ turned out to be a robust design principle for content pipelines.
+
+## The deployment war stories
+
+The interesting part of moving the generator to Lambda was the several hours of debugging in the middle.
+
+**Python runtime mismatch.** AWS defaulted the new Lambda to Python 3.14. My deployment package was built for 3.12. The error didn't say "wrong Python version" — it said `No module named 'pydantic_core._pydantic_core'`, because the compiled C extension is a `cpython-312` `.so` file that won't load under 3.14. Fix: match the runtime to the build target. Lesson: always read which Python the platform defaulted you into before debugging anything else.
+
+**Mac vs Linux binaries.** Even after pinning the Python version, `pydantic-core` kept loading the macOS binary into my zip. I'd been using `uv` for packaging — `uv pip install --only-binary` is supposed to fetch a Linux wheel, but reliably didn't in this case. Switching to vanilla `python3 -m pip install --platform manylinux2014_x86_64 --only-binary=:all:` finally pulled the right artifact. The tool I trusted was the problem; the older boring tool worked.
+
+**Optional imports for dual environments.** `python-dotenv` is great locally — reads `.env`, populates `os.environ`. On Lambda, environment variables come from AWS directly, and `python-dotenv` is just dead weight that doesn't ship in the runtime. Solution: wrap the import in `try/except ImportError`:
+
+```python
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not needed on Lambda — env vars are set directly
+```
+
+Same code works in both environments.
+
+**Default timeout.** Lambda's default timeout is 3 seconds. My pipeline needs about 4 minutes — 13 sequential Brave calls plus four sequential model generations. Bump it to 900 seconds (Lambda's max) or watch the timeouts pile up in CloudWatch.
+
+**The browser upload that didn't.** This one cost an hour. AWS's web console has an "Upload .zip file" button. It accepts the file, shows a green confirmation, and silently does not update the deployed code — the SHA-256 hash stays the same. `aws lambda update-function-code` from the CLI works correctly. Don't trust the browser upload.
+
+**Secrets are easy to leak when copy-pasting console output.** I rotated three API keys during this project — twice because I pasted command output that included environment variables. Each rotation was the same loop: regenerate the key, update Lambda env vars, update local `.env`. Painful in proportion to how preventable it is. Next step on my list is wiring `gitleaks` into a GitHub Actions workflow so commits get scanned before they hit the remote.
+
+## What I'd do differently
+
+Three things change if I were building it from scratch:
+
+**Parallelize the model calls.** They run sequentially right now (~4 minutes total) because that was the simplest version. The four OpenRouter calls have no dependencies on each other — running them concurrently with `asyncio` would cut runtime by roughly 75%. Not urgent at a three-day cadence; would matter more for anything interactive.
+
+**Fetch full page content, not just snippets.** Brave returns one- or two-sentence snippets per result. When the snippets are thin, the reports come out sparse. A second pass that fetches the top result's full text (Firecrawl or a readability extractor) would give the models richer grounding. Cost: more search budget. Benefit: better reports during sparse weeks.
+
+**Server-side vote dedup.** Votes are currently deduplicated per-browser using `localStorage`. That's a soft signal — clearing storage or opening incognito gets around it. A real eval would tie votes to authenticated sessions, or at least to a hash of (IP + user-agent) stored server-side. The current setup is honest about being a soft signal; it's not pretending to be more than it is.
+
+## Links
+
+- [The live comparison](https://samiryuja.dev/projects/futbol-report) — latest run, history, voting
+- [Generator repo](https://github.com/syuja/futbol-report) — Python pipeline, Lambda packaging, EventBridge schedule
+- [Site repo](https://github.com/syuja/samiryuja.dev) — the Next.js side, comparison page, vote API
+
+The project replaced one fragile bot with one slightly-less-fragile pipeline that produces more interesting output. Worth the hours of `pydantic_core._pydantic_core` debugging along the way? Honestly, yes — that's where most of the actual learning happened.

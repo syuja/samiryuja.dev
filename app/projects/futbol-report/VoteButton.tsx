@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function VoteButton({
   timestamp,
@@ -11,11 +11,24 @@ export default function VoteButton({
   model: string
   initialCount: number
 }) {
+  const storageKey = `futbol-vote:${timestamp}:${model}`
+
   const [count, setCount] = useState(initialCount)
   const [voting, setVoting] = useState(false)
   const [voted, setVoted] = useState(false)
 
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(storageKey) === '1') {
+        setVoted(true)
+      }
+    } catch {
+      // localStorage unavailable (private mode, etc.) — fall through
+    }
+  }, [storageKey])
+
   async function handleVote() {
+    if (voted) return
     setVoting(true)
     try {
       const res = await fetch('/api/vote', {
@@ -26,6 +39,11 @@ export default function VoteButton({
       if (res.ok) {
         setCount(count + 1)
         setVoted(true)
+        try {
+          localStorage.setItem(storageKey, '1')
+        } catch {
+          // localStorage unavailable — vote counted in-session only
+        }
       }
     } catch (error) {
       console.error('Vote failed:', error)
