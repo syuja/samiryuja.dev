@@ -2,5 +2,6 @@
   "llm": 1,
   "aws": 1,
   "eval": 1,
-  "side-project": 1
+  "side-project": 1,
+  "serverless": 1
 }
