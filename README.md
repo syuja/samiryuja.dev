@@ -339,6 +339,14 @@ Consider removing the following features that cannot be used in a static build:
 
 Using the template? Support this effort by giving a star on GitHub, sharing your own blog and giving a shoutout on Twitter or becoming a project [sponsor](https://github.com/sponsors/timlrx).
 
+## Security
+
+This repo runs automated security scanning on every push, pull request, and weekly schedule:
+
+- **Secret scanning** — [gitleaks](https://github.com/gitleaks/gitleaks) scans full git history for accidentally committed secrets.
+- **Dependency CVE scanning** — [osv-scanner](https://github.com/google/osv-scanner) checks `yarn.lock` against the OSV database; HIGH/CRITICAL findings fail the build.
+- **Dependency updates** — [Dependabot](https://docs.github.com/en/code-security/dependabot) opens weekly PRs for npm and GitHub Actions upgrades.
+
 ## Licence
 
 [MIT](https://github.com/timlrx/tailwind-nextjs-starter-blog/blob/main/LICENSE) © [Timothy Lin](https://www.timlrx.com)
