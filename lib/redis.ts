@@ -1,4 +1,4 @@
-import { createClient } from 'redis'
+import { createClient, RedisClientType } from 'redis'
 
 export type Run = {
   timestamp: string
@@ -7,9 +7,7 @@ export type Run = {
 }
 
 // Opens a connection, runs your function, always closes the connection.
-async function withRedis<T>(
-  fn: (client: ReturnType<typeof createClient>) => Promise<T>
-): Promise<T> {
+async function withRedis<T>(fn: (client: RedisClientType) => Promise<T>): Promise<T> {
   const client = createClient({ url: process.env.REDIS_URL })
   await client.connect()
   try {
