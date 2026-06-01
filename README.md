@@ -344,8 +344,10 @@ Using the template? Support this effort by giving a star on GitHub, sharing your
 This repo runs automated security scanning on every push, pull request, and weekly schedule:
 
 - **Secret scanning** — [gitleaks](https://github.com/gitleaks/gitleaks) scans full git history for accidentally committed secrets.
-- **Dependency CVE scanning** — [osv-scanner](https://github.com/google/osv-scanner) checks `yarn.lock` against the OSV database; HIGH/CRITICAL findings fail the build.
+- **Dependency CVE scanning** — [osv-scanner](https://github.com/google/osv-scanner) runs Google's official reusable workflow to check dependencies against the OSV database; findings are uploaded to the GitHub Security tab.
 - **Dependency updates** — [Dependabot](https://docs.github.com/en/code-security/dependabot) opens weekly PRs for npm and GitHub Actions upgrades.
+
+Auto-merge is NOT enabled — all Dependabot PRs require human review before merging.
 
 ## Licence
 
