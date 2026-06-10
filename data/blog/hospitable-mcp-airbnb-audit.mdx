@@ -1,0 +1,151 @@
+---
+title: "I Gave Claude the Keys to My Airbnb for Two Weeks. Here's What It Found."
+date: 2026-06-09
+tags: [llm, mcp, ai-agents, airbnb, hospitable]
+draft: true
+---
+
+I connected the official Hospitable MCP server to Claude, pointed it at my Airbnb, and asked
+it to take a look. Here's what I found.
+
+A language model is only as good as the context it's given. On its own it can talk about
+short-term rentals in the abstract; it knows nothing about _mine_. The **MCP** closes that gap —
+it gives the model live, authenticated access to my actual reservations, messages, reviews,
+and calendar. So instead of guessing, it can look at the real thing. I run a two-room rental
+I've managed for over a year, and I figured I had it under control. Two weeks of letting an
+agent actually look turned up a surprising amount that was quietly broken.
+
+## Setup
+
+- Hospitable **Professional** plan (the tier that includes MCP access)
+- Claude Pro
+- Connect them: **Settings → Connectors → add custom connector → OAuth**
+- ~50 tools load: reservations, messages, calendar, reviews, the Knowledge Hub, tasks, smart locks
+- **Permissions were monitored the entire time** — no messages were ever sent to guests.
+  Everything guest-facing stayed read-only or draft-and-paste: the agent proposes, I decide.
+
+## What an AI audit of a real business actually surfaces
+
+Here are the highlights of what it found, in four buckets.
+
+### 1. Liability
+
+The registered guest booked from overseas, but the person staying was his wife, who had no
+verified profile of her own. The agent caught it by reading the message thread. That matters
+because AirCover and host protections are written around the _registered_ guest, and nothing in
+the structured reservation data reveals a substitution. It only surfaces if someone actually
+reads what the guest wrote.
+
+### 2. Revenue opportunities
+
+This bucket changed how I look at my inquiry inbox. Every inquiry is revenue waiting on a
+response, and the agent treated it that way: it read the full inquiry history and identified
+exactly where a faster or better-matched reply would have won the booking. One guest asked about
+renting the whole place; by the time a reply went out hours later, those dates had gone to
+another property. Another inquiry came in written in Spanish, and the automated rule answered in
+English because no multilingual template existed. Across the history, it flagged six inquiries
+where response time or language likely cost the **conversion**.
+
+None of this is visible on any dashboard. What the agent produced was effectively a conversion
+punch list: respond faster to whole-home inquiries, add a Spanish template, and answer the
+recurring questions (parking, check-in) before guests have to ask. Questions are demand —
+the goal is turning them into bookings.
+
+### 3. Things quietly broken
+
+The theme in this bucket: the business changed, and the documentation didn't keep up.
+
+The big one was **stale door codes.** When I first set up the Airbnb, I hardcoded the entry
+codes into the Knowledge Hub — the reference Hospitable's AI uses to answer guests. Later I
+synced my Schlage lock with Hospitable, which generates a fresh code for every reservation. The
+original setup-era codes stayed behind in seven different Knowledge Hub entries, wrong for every
+guest since. If anyone had asked the AI "what's my door code?", it would have confidently handed
+them a code that opens nothing.
+
+A **typo** had been sitting in an active message rule for months: a small formatting error in
+the review request that fires after every checkout, the final touchpoint of every stay. Easy to
+fix, impossible to spot without going line by line through every rule, which no one does.
+
+The agent also caught a **time-sensitive review window.** A recent guest had smoked inside and
+brought unregistered visitors, and my window to review them was about to close. Once that window
+shuts, future hosts get no warning, so that was the catch that mattered. It also surfaced a
+backlog of guest reviews I'd never responded to — lower stakes, but review responses are public
+and responsiveness factors into Airbnb's ranking, so the backlog went on the list rather than in
+the trash.
+
+Parking was in this bucket too. It's the single most common question guests ask, and the
+Knowledge Hub had no car parking entry at all. The Parking section existed, but it only covered
+bicycles.
+
+### 4. Features I wasn't using but should be
+
+Some of what it surfaced wasn't broken, just sitting there unused. The Knowledge Hub was thin
+and partly wrong; now it's corrected and actually filled in. Tasks was completely empty, so I
+registered myself as a teammate and set up text alerts for upcoming cleanings. Right now that's
+redundant since it's just me. But the structure exists now, and the day I bring on a
+housekeeper, I swap in their number and nothing else changes.
+
+## How I actually use it
+
+The dramatic catches are one thing; the reason it's still connected is the boring daily stuff.
+
+The first is **complaint clustering**, because it goes straight at my biggest pain point: a new
+guest arrives and starts complaining, and in the moment it's hard to tell a one-off from a
+pattern. I had the agent group every review across Airbnb and Booking.com by theme. The runaway
+top three:
+
+1. **Bedroom doors didn't lock from the inside** — four guests, both rooms. The clear #1.
+   Guests wanted keyed locks, not the privacy locks the rooms came with. The main entrance
+   already had a Schlage deadbolt; the fix was recently replacing the bedroom privacy locks with
+   keyed door knobs — and the clustering confirmed the complaints dropped off after the change.
+2. Location and transit — guests underestimating how far things were.
+3. Surprise at the shared-home setup — a listing-clarity issue, not a property one.
+
+The clustering also corrected an assumption I'd been carrying: I was sure Booking.com guests
+complained more than Airbnb guests. Totally wrong. The data showed the gap was a scoring-norm
+artifact, not a real satisfaction difference.
+
+![Review dashboard across Airbnb and Booking.com](/static/images/hospitable-mcp/review_dashboard.png)
+
+The second is the **weekly turnover outlook.** One question and I get a clean in-chat calendar
+of which days have a checkout and a check-in stacked up — the days I can't schedule anything
+else. Combined with the task alerts, I stopped double-booking myself — committing to a day in
+the office only to find out it was also a turnover day.
+
+![In-chat turnover calendar](/static/images/turnover_calendar.png)
+
+## False positives and rough edges
+
+If I only told you the good parts you shouldn't believe me. The honest column:
+
+**It flagged a problem that wasn't one.** Reviewing my message templates, the agent called out
+messages where the `%smartlock_code%` shortcode hadn't resolved. The real explanation: those
+guests had already checked out, and their codes had expired with the reservation. The lesson is
+that the agent doesn't automatically know the lifecycle of the data it's reading — what looks
+broken on a past reservation can be perfectly normal.
+
+**Writes can fail silently.** Adding an item to a Knowledge Hub that had never been initialized
+succeeded with no error at all — but nothing actually appeared until I generated the hub in the
+dashboard. A success response that doesn't result in the thing existing is the kind of surprise
+that bites you later.
+
+## What's next
+
+The obvious next step is automating the loop I ran by hand these two weeks — issue comes in, gets
+detected, a fix gets drafted for me to approve. I'm still working out exactly what that should
+look like, so I'll leave it there for now.
+
+## The part that stuck with me
+
+What surprised me wasn't any one finding — it was the **speed of the audit.** Catching a
+months-old typo without reading every message rule by hand. Clustering a year of reviews into
+three themes in seconds. Fewer complaints, less of my time spent firefighting, more of it back.
+The most useful thing an agent did here wasn't anything clever — it was simply _looking_,
+systematically, at data I already had, and sorting it into the four things that actually matter:
+liabilities, **revenue opportunities**, the things that had quietly snuck past me, and the
+features I should have been using all along.
+
+---
+
+_Built with the official Hospitable MCP server connected to Claude. Real two-room property, real
+findings. Guest details kept deliberately vague._
