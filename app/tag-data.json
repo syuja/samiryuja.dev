@@ -1,7 +1,11 @@
 {
-  "llm": 1,
+  "llm": 2,
   "aws": 1,
   "eval": 1,
   "side-project": 1,
-  "serverless": 1
+  "serverless": 1,
+  "mcp": 1,
+  "ai-agents": 1,
+  "airbnb": 1,
+  "hospitable": 1
 }
