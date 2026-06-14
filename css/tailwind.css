@@ -159,6 +159,38 @@ input:-webkit-autofill:focus {
   overflow: auto hidden;
 }
 
+/* Print rules used by /world-cup-bracket */
+@media print {
+  /* Hide the site shell and any element opting out of print. */
+  body > header,
+  header[class*='sticky'],
+  body > div > section > header,
+  .no-print {
+    display: none !important;
+  }
+  /* Footer of the site too — the bracket page has its own footer note. */
+  body > div > section > footer {
+    display: none !important;
+  }
+  /* Better paper layout: force pure black on white for cost-effective printing. */
+  body,
+  .bracket-root {
+    color: #000 !important;
+    background: #fff !important;
+  }
+  .bracket-root *,
+  .bracket-root *::before,
+  .bracket-root *::after {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #666 !important;
+    box-shadow: none !important;
+  }
+  .bracket-root a {
+    text-decoration: none !important;
+  }
+}
+
 .content-header-link {
   opacity: 0;
   margin-left: -24px;

@@ -3848,6 +3848,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/canvas-confetti@npm:^1.9.0":
+  version: 1.9.0
+  resolution: "@types/canvas-confetti@npm:1.9.0"
+  checksum: 56227a362cead21ab76b0870e07e0cc2d26c800f5bc0fc109e4a3eca1a4d4dd317e1292163246d389827b7f30ce9e6eca3915681f3c80ed1e46491018f48a266
+  languageName: node
+  linkType: hard
+
 "@types/debug@npm:^4.0.0":
   version: 4.1.12
   resolution: "@types/debug@npm:4.1.12"
@@ -4871,6 +4878,13 @@ __metadata:
   version: 1.0.30001769
   resolution: "caniuse-lite@npm:1.0.30001769"
   checksum: be34424b0d2e24f0022d605b14ee799dc0d21aa8315d9db2b94176b311b1b5165972d04653692b509e107fbea5fc5cf3aac888bf61377e3e3048d678fb9bc812
+  languageName: node
+  linkType: hard
+
+"canvas-confetti@npm:^1.9.4":
+  version: 1.9.4
+  resolution: "canvas-confetti@npm:1.9.4"
+  checksum: 61f069b220ee666ec56e5403a7118f1c22c4d55597da3ebfdc8227acdb432ecb9e1bae4b4c86fd15b001422240939d591e44b501dc68ddd545e14f373ab7488e
   languageName: node
   linkType: hard
 
@@ -11705,12 +11719,14 @@ __metadata:
     "@tailwindcss/forms": ^0.5.11
     "@tailwindcss/postcss": ^4.1.18
     "@tailwindcss/typography": ^0.5.19
+    "@types/canvas-confetti": ^1.9.0
     "@types/mdx": ^2.0.13
     "@types/react": ^19.2.13
     "@typescript-eslint/eslint-plugin": ^8.54.0
     "@typescript-eslint/parser": ^8.54.0
     "@vercel/analytics": ^2.0.1
     body-scroll-lock: ^3
+    canvas-confetti: ^1.9.4
     contentlayer2: ^0.5.8
     cross-env: ^10.1.0
     esbuild: ^0.28.0
