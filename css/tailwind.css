@@ -223,51 +223,77 @@ input:-webkit-autofill:focus {
 /* Print rules used by /world-cup-bracket
    Goal: one landscape page showing only the horizontal bracket. All controls
    and supplementary sections (group stage, wildcards, knockout picks,
-   champion banner, footer note) carry `.no-print` and disappear. */
+   champion banner, footer note) carry `.no-print` and disappear.
+
+   Scoping: BracketClient sets `document.body.dataset.printBracket = 'true'`
+   on mount and removes it on unmount, so every rule below is gated on
+   `body[data-print-bracket]`. Printing any other route renders unchanged.
+   The @page rule is scoped via a named page applied through the `page`
+   property on the scoping selector. */
+@page wcBracketPrint {
+  size: landscape;
+  margin: 0.4in;
+}
+
 @media print {
-  @page {
-    size: landscape;
-    margin: 0.4in;
+  body[data-print-bracket] {
+    page: wcBracketPrint;
   }
 
   /* Hide the site shell and anything opting out of print. */
-  body > header,
-  header[class*='sticky'],
-  body > div > section > header,
-  body > div > section > footer,
-  .no-print {
+  body[data-print-bracket] > header,
+  body[data-print-bracket] header,
+  body[data-print-bracket] footer,
+  body[data-print-bracket] .no-print {
     display: none !important;
   }
 
+  /* Let the bracket span the full printable width by neutralizing the
+     centered max-width / horizontal padding the shared SectionContainer
+     applies on screen. Scoped to this route only. */
+  body[data-print-bracket] section {
+    max-width: none !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
   /* Force pure black on white in the bracket for cost-effective printing. */
-  body,
-  .bracket-root {
+  body[data-print-bracket],
+  body[data-print-bracket] .bracket-root {
     color: #000 !important;
     background: #fff !important;
   }
-  .bracket-root *,
-  .bracket-root *::before,
-  .bracket-root *::after {
+  body[data-print-bracket] .bracket-root *,
+  body[data-print-bracket] .bracket-root *::before,
+  body[data-print-bracket] .bracket-root *::after {
     color: #000 !important;
     background: transparent !important;
     border-color: #666 !important;
     box-shadow: none !important;
   }
-  .bracket-root a {
+  body[data-print-bracket] .bracket-root a {
     text-decoration: none !important;
   }
 
-  /* Scale the 1360px bracket down to fit one landscape page. A landscape
-     Letter page at 96dpi minus 0.4" margins gives ~960px of usable width;
-     0.7 fits with comfortable margin. */
-  [data-bracket-horizontal] > div > div {
-    transform: scale(0.7);
+  /* Scale the 1360px bracket to fill one landscape page. US Letter
+     landscape at 96dpi minus 0.4" margins gives ~979px usable width;
+     A4 landscape gives ~1045px. 0.72 lands at ~979px wide — fills
+     Letter exactly, fits A4 with ~5% margin. */
+  body[data-print-bracket] [data-bracket-horizontal] {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  body[data-print-bracket] [data-bracket-horizontal] > div > div {
+    transform: scale(0.72);
     transform-origin: top left;
   }
 
   /* Don't let the bracket wrapper clip the scaled grid. */
-  [data-bracket-horizontal],
-  [data-bracket-horizontal] > div {
+  body[data-print-bracket] [data-bracket-horizontal],
+  body[data-print-bracket] [data-bracket-horizontal] > div {
     overflow: visible !important;
   }
 }

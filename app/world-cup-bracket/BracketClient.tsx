@@ -169,6 +169,16 @@ export default function BracketClient() {
     lastFinalWinner.current = finalWinner
   }, [finalWinner])
 
+  /* Mark <body> so the print stylesheet can scope rules that hit shared
+     layout chrome (header, footer, SectionContainer width) without
+     affecting other routes' print output. */
+  useEffect(() => {
+    document.body.dataset.printBracket = 'true'
+    return () => {
+      delete document.body.dataset.printBracket
+    }
+  }, [])
+
   return (
     <div className="bracket-root space-y-10">
       <BracketHeader
@@ -228,30 +238,35 @@ function BracketHeader({
   onReset: () => void
   onPrint: () => void
 }) {
+  const trimmedName = bracketName.trim()
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="flex-1">
-        <label
-          htmlFor="bracket-name"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 print:hidden"
-        >
-          Bracket name
-        </label>
-        <input
-          id="bracket-name"
-          type="text"
-          value={bracketName}
-          onChange={(e) => setBracketName(e.target.value)}
-          placeholder="e.g. Samir's Picks"
-          className="focus:border-primary-500 focus:ring-primary-500 mt-1 block w-full max-w-sm rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 print:border-0 print:bg-transparent print:p-0 print:text-base print:font-semibold"
-          aria-describedby="bracket-name-hint"
-        />
-        <p
-          id="bracket-name-hint"
-          className="no-print mt-1 text-xs text-gray-500 dark:text-gray-400"
-        >
-          Shown in the print header for the office pool.
-        </p>
+        <div className="no-print">
+          <label
+            htmlFor="bracket-name"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Bracket name
+          </label>
+          <input
+            id="bracket-name"
+            type="text"
+            value={bracketName}
+            onChange={(e) => setBracketName(e.target.value)}
+            placeholder="e.g. Samir's Picks"
+            className="focus:border-primary-500 focus:ring-primary-500 mt-1 block w-full max-w-sm rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            aria-describedby="bracket-name-hint"
+          />
+          <p id="bracket-name-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Shown in the print header for the office pool.
+          </p>
+        </div>
+        {trimmedName && (
+          <div aria-hidden="true" className="hidden text-base font-semibold print:block">
+            {trimmedName}
+          </div>
+        )}
       </div>
       <div className="no-print flex items-center gap-2">
         <button

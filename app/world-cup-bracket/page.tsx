@@ -9,8 +9,8 @@ export const metadata = genPageMetadata({
 
 export default function Page() {
   return (
-    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-      <div className="space-y-2 pt-6 pb-8 md:space-y-5">
+    <div className="divide-y divide-gray-200 dark:divide-gray-700 print:divide-y-0">
+      <div className="space-y-2 pt-6 pb-8 md:space-y-5 print:hidden">
         <h1 className="text-3xl leading-9 font-extrabold tracking-tight text-gray-900 sm:text-4xl sm:leading-10 md:text-5xl md:leading-14 dark:text-gray-100">
           World Cup 2026 Bracket
         </h1>
@@ -19,7 +19,7 @@ export default function Page() {
           matchup.
         </p>
       </div>
-      <div className="py-8">
+      <div className="py-8 print:py-0">
         <BracketClient />
       </div>
     </div>
