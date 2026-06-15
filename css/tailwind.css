@@ -278,6 +278,21 @@ input:-webkit-autofill:focus {
     text-decoration: none !important;
   }
 
+  /* The normalization rule above wipes pseudo-element backgrounds with
+     `background: transparent !important`, which kills the connector lines
+     (they're drawn purely with background-color on ::before/::after).
+     Re-assert the connector backgrounds here, after the wipe, and force
+     them to print even when the user has "Background graphics" disabled
+     in the browser print dialog. */
+  body[data-print-bracket] .bracket-root [class*='bracket-cell']::before,
+  body[data-print-bracket] .bracket-root [class*='bracket-cell']::after,
+  body[data-print-bracket] .bracket-root [class*='bracket-pair']::before,
+  body[data-print-bracket] .bracket-root [class*='bracket-pair']::after {
+    background-color: #666 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* Scale the 1360px bracket to fill one landscape page. US Letter
      landscape at 96dpi minus 0.4" margins gives ~979px usable width;
      A4 landscape gives ~1045px. 0.72 lands at ~979px wide — fills
