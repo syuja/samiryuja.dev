@@ -159,20 +159,87 @@ input:-webkit-autofill:focus {
   overflow: auto hidden;
 }
 
-/* Print rules used by /world-cup-bracket */
+/* Connector lines for /world-cup-bracket horizontal bracket (lg+).
+   Geometry assumption: each match cell sits inside a flex pair container
+   with `justify-around`, so for 2 items the centers land at 25% / 75% of
+   the container height. The pair vertical line spans that range. Cell
+   stubs extend (gap/2 = 4px) into the column gap so they meet the pair
+   line and the next column's stub exactly at the gap midpoint. */
+.bracket-cell-out-left,
+.bracket-cell-in-left,
+.bracket-cell-out-right,
+.bracket-cell-in-right,
+.bracket-pair-left,
+.bracket-pair-right {
+  position: relative;
+}
+.bracket-cell-out-left::after,
+.bracket-cell-in-right::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -0.25rem;
+  width: 0.25rem;
+  height: 1px;
+  background-color: var(--color-gray-300);
+}
+.bracket-cell-in-left::before,
+.bracket-cell-out-right::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -0.25rem;
+  width: 0.25rem;
+  height: 1px;
+  background-color: var(--color-gray-300);
+}
+.bracket-pair-left::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  right: -0.25rem;
+  width: 1px;
+  background-color: var(--color-gray-300);
+}
+.bracket-pair-right::before {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: -0.25rem;
+  width: 1px;
+  background-color: var(--color-gray-300);
+}
+.dark .bracket-cell-out-left::after,
+.dark .bracket-cell-in-right::after,
+.dark .bracket-cell-in-left::before,
+.dark .bracket-cell-out-right::before,
+.dark .bracket-pair-left::after,
+.dark .bracket-pair-right::before {
+  background-color: var(--color-gray-600);
+}
+
+/* Print rules used by /world-cup-bracket
+   Goal: one landscape page showing only the horizontal bracket. All controls
+   and supplementary sections (group stage, wildcards, knockout picks,
+   champion banner, footer note) carry `.no-print` and disappear. */
 @media print {
-  /* Hide the site shell and any element opting out of print. */
+  @page {
+    size: landscape;
+    margin: 0.4in;
+  }
+
+  /* Hide the site shell and anything opting out of print. */
   body > header,
   header[class*='sticky'],
   body > div > section > header,
+  body > div > section > footer,
   .no-print {
     display: none !important;
   }
-  /* Footer of the site too — the bracket page has its own footer note. */
-  body > div > section > footer {
-    display: none !important;
-  }
-  /* Better paper layout: force pure black on white for cost-effective printing. */
+
+  /* Force pure black on white in the bracket for cost-effective printing. */
   body,
   .bracket-root {
     color: #000 !important;
@@ -188,6 +255,20 @@ input:-webkit-autofill:focus {
   }
   .bracket-root a {
     text-decoration: none !important;
+  }
+
+  /* Scale the 1360px bracket down to fit one landscape page. A landscape
+     Letter page at 96dpi minus 0.4" margins gives ~960px of usable width;
+     0.7 fits with comfortable margin. */
+  [data-bracket-horizontal] > div > div {
+    transform: scale(0.7);
+    transform-origin: top left;
+  }
+
+  /* Don't let the bracket wrapper clip the scaled grid. */
+  [data-bracket-horizontal],
+  [data-bracket-horizontal] > div {
+    overflow: visible !important;
   }
 }
 

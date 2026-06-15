@@ -13,6 +13,7 @@ import {
   allThirdSlotLabels,
   getMatch,
   teamById,
+  type Group,
   type Matchup,
   type SlotRef,
   type TeamId,
@@ -63,7 +64,25 @@ function resolveSide(side: SlotRef, picks: Picks): TeamId | '' {
 }
 
 function reconcile(picks: Picks): Picks {
-  const next: Picks = { ...picks, winner: { ...picks.winner } }
+  const next: Picks = {
+    ...picks,
+    thirdSlot: { ...picks.thirdSlot },
+    winner: { ...picks.winner },
+  }
+
+  // 1. Clear wildcard-slot assignments whose team is no longer a third-place
+  //    pick in any of that slot's eligible groups (e.g. user changed a
+  //    groupThird pick out from under a previously-assigned slot).
+  for (const s of thirdSlots) {
+    const assigned = next.thirdSlot[s.label]
+    if (!assigned) continue
+    const stillEligible = s.eligibleGroups.some((g) => next.groupThird[g] === assigned)
+    if (!stillEligible) next.thirdSlot[s.label] = ''
+  }
+
+  // 2. Clear matchup winners whose team is no longer in {top, bottom}. The
+  //    walk is in upstream-to-downstream order via `allMatches`, so a single
+  //    pass cascades through R32 → R16 → QF → SF → Final.
   for (const m of allMatches) {
     const top = resolveSide(m.top, next)
     const bottom = resolveSide(m.bottom, next)
@@ -93,6 +112,25 @@ const slotPlaceholder = (side: SlotRef): string => {
       return `Winner of ${side.from}`
     case 'LOSER':
       return `Loser of ${side.from}`
+  }
+}
+
+const teamShort = (id: TeamId | ''): string => {
+  if (!id) return ''
+  const t = teamById[id]
+  return t ? `${t.flag ?? ''} ${t.short}`.trim() : id
+}
+
+const slotShortLabel = (side: SlotRef): string => {
+  switch (side.kind) {
+    case 'GROUP':
+      return `${side.place}${side.group}`
+    case 'THIRD':
+      return `3 ${side.eligibleGroups.join('')}`
+    case 'WINNER':
+      return `→ ${side.from}`
+    case 'LOSER':
+      return `L ${side.from}`
   }
 }
 
@@ -145,22 +183,28 @@ export default function BracketClient() {
 
       <ThirdPlaceSlotSection picks={picks} setThirdSlot={setThirdSlot} />
 
-      <RoundSection title="Round of 32" matches={roundOf32} picks={picks} setWinner={setWinner} />
-      <RoundSection title="Round of 16" matches={roundOf16} picks={picks} setWinner={setWinner} />
-      <RoundSection
-        title="Quarterfinals"
-        matches={quarterFinals}
-        picks={picks}
-        setWinner={setWinner}
-      />
-      <RoundSection title="Semifinals" matches={semiFinals} picks={picks} setWinner={setWinner} />
-      <RoundSection
-        title="Third-place playoff"
-        matches={[thirdPlaceMatch]}
-        picks={picks}
-        setWinner={setWinner}
-      />
-      <RoundSection title="Final" matches={[finalMatch]} picks={picks} setWinner={setWinner} />
+      <KnockoutPicksSection picks={picks} setWinner={setWinner} />
+
+      {/* Stacked rounds — shown only below `lg` on screen, hidden at print. */}
+      <div className="space-y-10 lg:hidden print:!hidden">
+        <RoundSection title="Round of 32" matches={roundOf32} picks={picks} />
+        <RoundSection title="Round of 16" matches={roundOf16} picks={picks} />
+        <RoundSection title="Quarterfinals" matches={quarterFinals} picks={picks} />
+        <RoundSection title="Semifinals" matches={semiFinals} picks={picks} />
+        <RoundSection title="Third-place playoff" matches={[thirdPlaceMatch]} picks={picks} />
+        <RoundSection title="Final" matches={[finalMatch]} picks={picks} />
+      </div>
+
+      {/* Horizontal funnel bracket — desktop screens (lg+) AND print at any
+          size. Print rules in css/tailwind.css scale it to one landscape
+          page. Breakout (`lg:w-screen` + negative margin) lets the full
+          1360px grid fit on wide displays without horizontal scroll. */}
+      <div
+        data-bracket-horizontal
+        className="hidden lg:[margin-left:calc(50%-50vw)] lg:block lg:w-screen print:[margin-left:0] print:!block print:[width:100%]"
+      >
+        <HorizontalBracket picks={picks} />
+      </div>
 
       <ChampionBanner finalWinner={finalWinner} />
 
@@ -189,7 +233,7 @@ function BracketHeader({
       <div className="flex-1">
         <label
           htmlFor="bracket-name"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 print:hidden"
         >
           Bracket name
         </label>
@@ -253,7 +297,7 @@ function GroupStageSection({
   ) => void
 }) {
   return (
-    <section aria-labelledby="group-stage-heading">
+    <section aria-labelledby="group-stage-heading" className="no-print">
       <h2
         id="group-stage-heading"
         className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100"
@@ -373,7 +417,7 @@ function ThirdPlaceSlotSection({
   setThirdSlot: (label: string, teamId: TeamId | '') => void
 }) {
   return (
-    <section aria-labelledby="third-place-heading">
+    <section aria-labelledby="third-place-heading" className="no-print">
       <h2
         id="third-place-heading"
         className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100"
@@ -386,9 +430,18 @@ function ThirdPlaceSlotSection({
       </p>
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {thirdSlots.map((s) => {
+          // Teams already assigned to a different slot are hidden here, so no
+          // team can occupy two wildcard slots simultaneously.
+          const takenElsewhere = new Set(
+            thirdSlots
+              .filter((other) => other.label !== s.label)
+              .map((other) => picks.thirdSlot[other.label])
+              .filter(Boolean) as TeamId[]
+          )
           const options = s.eligibleGroups
             .map((g) => ({ group: g, team: picks.groupThird[g] }))
             .filter((o): o is { group: string; team: TeamId } => Boolean(o.team))
+            .filter((o) => !takenElsewhere.has(o.team))
             .map((o) => ({ value: o.team, label: `${teamLabel(o.team)} (Group ${o.group})` }))
 
           return (
@@ -416,37 +469,63 @@ function ThirdPlaceSlotSection({
   )
 }
 
-/* ---------- knockout round + matchup row ----------------------------- */
+/* ---------- knockout picks (one place that owns all winner selects) -- */
 
-function RoundSection({
-  title,
-  matches,
+function KnockoutPicksSection({
   picks,
   setWinner,
 }: {
-  title: string
-  matches: Matchup[]
   picks: Picks
   setWinner: (matchId: string, teamId: TeamId | '') => void
 }) {
+  const groupsByRound: { title: string; matches: Matchup[]; cols: string }[] = [
+    {
+      title: 'Round of 32',
+      matches: roundOf32,
+      cols: 'sm:grid-cols-2 lg:grid-cols-4',
+    },
+    {
+      title: 'Round of 16',
+      matches: roundOf16,
+      cols: 'sm:grid-cols-2 lg:grid-cols-4',
+    },
+    { title: 'Quarterfinals', matches: quarterFinals, cols: 'sm:grid-cols-2 lg:grid-cols-4' },
+    { title: 'Semifinals', matches: semiFinals, cols: 'sm:grid-cols-2' },
+    { title: 'Third-place playoff', matches: [thirdPlaceMatch], cols: '' },
+    { title: 'Final', matches: [finalMatch], cols: '' },
+  ]
+
   return (
-    <section aria-labelledby={`round-${title}`}>
+    <section aria-labelledby="knockout-picks-heading" className="no-print">
       <h2
-        id={`round-${title}`}
+        id="knockout-picks-heading"
         className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100"
       >
-        {title}
+        Knockout picks
       </h2>
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-        {matches.map((m) => (
-          <MatchupRow key={m.id} match={m} picks={picks} setWinner={setWinner} />
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Pick the winner of each knockout match. Each row unlocks once the upstream picks decide its
+        two teams. The bracket diagram below updates live.
+      </p>
+      <div className="mt-4 space-y-6">
+        {groupsByRound.map((round) => (
+          <div key={round.title}>
+            <h3 className="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+              {round.title}
+            </h3>
+            <div className={`mt-2 grid grid-cols-1 gap-2 ${round.cols}`}>
+              {round.matches.map((m) => (
+                <KnockoutPickRow key={m.id} match={m} picks={picks} setWinner={setWinner} />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
   )
 }
 
-function MatchupRow({
+function KnockoutPickRow({
   match,
   picks,
   setWinner,
@@ -460,14 +539,6 @@ function MatchupRow({
   const ready = Boolean(top && bottom)
   const odds = ready ? matchupOdds(top, bottom) : null
   const winner = picks.winner[match.id] || ''
-
-  const labelTop = top
-    ? `${teamLabel(top)}${odds ? ` (${odds.topPct}%)` : ''}`
-    : slotPlaceholder(match.top)
-  const labelBottom = bottom
-    ? `${teamLabel(bottom)}${odds ? ` (${odds.bottomPct}%)` : ''}`
-    : slotPlaceholder(match.bottom)
-
   const options: { value: TeamId; label: string }[] = []
   if (top)
     options.push({ value: top, label: `${teamLabel(top)}${odds ? ` (${odds.topPct}%)` : ''}` })
@@ -476,6 +547,64 @@ function MatchupRow({
       value: bottom,
       label: `${teamLabel(bottom)}${odds ? ` (${odds.bottomPct}%)` : ''}`,
     })
+  return (
+    <div className="rounded-md border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
+      <PickRow
+        id={`winner-${match.id}`}
+        label={match.id}
+        value={winner}
+        options={options}
+        disabled={!ready}
+        placeholder={ready ? '— pick winner —' : '— waiting for upstream picks —'}
+        onChange={(v) => setWinner(match.id, v)}
+      />
+    </div>
+  )
+}
+
+/* ---------- knockout round + matchup row (display only) -------------- */
+
+function RoundSection({
+  title,
+  matches,
+  picks,
+}: {
+  title: string
+  matches: Matchup[]
+  picks: Picks
+}) {
+  return (
+    <section aria-labelledby={`round-${title}`}>
+      <h2
+        id={`round-${title}`}
+        className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100"
+      >
+        {title}
+      </h2>
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        {matches.map((m) => (
+          <MatchupRow key={m.id} match={m} picks={picks} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* Display-only matchup row (stacked bracket view). All winner-picking moved
+   to `<KnockoutPicksSection>` above the bracket — Issue B2. */
+function MatchupRow({ match, picks }: { match: Matchup; picks: Picks }) {
+  const top = resolveSide(match.top, picks)
+  const bottom = resolveSide(match.bottom, picks)
+  const ready = Boolean(top && bottom)
+  const odds = ready ? matchupOdds(top, bottom) : null
+  const winner = picks.winner[match.id] || ''
+
+  const labelTop = top
+    ? `${teamLabel(top)}${odds ? ` (${odds.topPct}%)` : ''}`
+    : slotPlaceholder(match.top)
+  const labelBottom = bottom
+    ? `${teamLabel(bottom)}${odds ? ` (${odds.bottomPct}%)` : ''}`
+    : slotPlaceholder(match.bottom)
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
@@ -495,17 +624,16 @@ function MatchupRow({
           {labelBottom}
         </span>
       </div>
-      <div className="mt-2">
-        <PickRow
-          id={`winner-${match.id}`}
-          label="Winner"
-          value={winner}
-          options={options}
-          disabled={!ready}
-          placeholder={ready ? '— pick winner —' : '— waiting for upstream picks —'}
-          onChange={(v) => setWinner(match.id, v)}
-        />
-      </div>
+      {winner ? (
+        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Winner:{' '}
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
+            {teamLabel(winner)}
+          </span>
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">No pick yet</div>
+      )}
     </div>
   )
 }
@@ -518,7 +646,7 @@ function ChampionBanner({ finalWinner }: { finalWinner: TeamId | '' }) {
     <div
       role="status"
       aria-live="polite"
-      className="border-primary-200 bg-primary-50 dark:border-primary-800 dark:bg-primary-950 flex flex-col items-center justify-center gap-3 rounded-xl border px-6 py-8 text-center"
+      className="border-primary-200 bg-primary-50 dark:border-primary-800 dark:bg-primary-950 no-print flex flex-col items-center justify-center gap-3 rounded-xl border px-6 py-8 text-center"
     >
       <TrophySvg />
       <div className="text-primary-700 dark:text-primary-300 text-sm tracking-wide uppercase">
@@ -560,11 +688,289 @@ function TrophySvg() {
   )
 }
 
+/* ---------- horizontal bracket (desktop, lg+) ------------------------ */
+
+function HorizontalBracket({ picks }: { picks: Picks }) {
+  const leftGroups = groups.slice(0, 6) // A–F
+  const rightGroups = groups.slice(6, 12) // G–L
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="mx-auto grid w-[1360px] min-w-[1360px] [grid-template-columns:7rem_repeat(4,7rem)_10rem_repeat(4,7rem)_7rem] [grid-template-rows:720px] gap-2">
+        {/* Left edge — Groups A–F */}
+        <GroupLabelColumn groupList={leftGroups} />
+
+        {/* Knockout columns funneling rightward.
+            R32 only emits forward; R16/QF receive AND emit; SF only receives
+            (SF→Final connector is custom in CenterColumn). */}
+        <PairColumn
+          matches={roundOf32.slice(0, 8)}
+          pairsOf={2}
+          side="left"
+          picks={picks}
+          hasOutgoing
+        />
+        <PairColumn
+          matches={roundOf16.slice(0, 4)}
+          pairsOf={2}
+          side="left"
+          picks={picks}
+          hasIncoming
+          hasOutgoing
+        />
+        <PairColumn
+          matches={quarterFinals.slice(0, 2)}
+          pairsOf={2}
+          side="left"
+          picks={picks}
+          hasIncoming
+          hasOutgoing
+        />
+        <PairColumn
+          matches={[semiFinals[0]]}
+          pairsOf={1}
+          side="left"
+          picks={picks}
+          hasIncoming
+          hasOutgoing
+        />
+
+        {/* Center — Final + Trophy + Third-place */}
+        <CenterColumn picks={picks} />
+
+        {/* Mirror right side, funneling leftward */}
+        <PairColumn
+          matches={[semiFinals[1]]}
+          pairsOf={1}
+          side="right"
+          picks={picks}
+          hasIncoming
+          hasOutgoing
+        />
+        <PairColumn
+          matches={quarterFinals.slice(2, 4)}
+          pairsOf={2}
+          side="right"
+          picks={picks}
+          hasIncoming
+          hasOutgoing
+        />
+        <PairColumn
+          matches={roundOf16.slice(4, 8)}
+          pairsOf={2}
+          side="right"
+          picks={picks}
+          hasIncoming
+          hasOutgoing
+        />
+        <PairColumn
+          matches={roundOf32.slice(8, 16)}
+          pairsOf={2}
+          side="right"
+          picks={picks}
+          hasOutgoing
+        />
+
+        {/* Right edge — Groups G–L */}
+        <GroupLabelColumn groupList={rightGroups} />
+      </div>
+    </div>
+  )
+}
+
+function GroupLabelColumn({ groupList }: { groupList: Group[] }) {
+  return (
+    <div className="flex h-full flex-col justify-around">
+      {groupList.map((g) => (
+        <div
+          key={g.id}
+          className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 dark:border-gray-700 dark:bg-gray-900"
+        >
+          <div className="text-[10px] font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+            Group {g.id}
+          </div>
+          <ul className="mt-0.5 space-y-0.5 text-[11px] text-gray-800 dark:text-gray-200">
+            {g.teams.map((tid) => (
+              <li key={tid} className="truncate">
+                {teamShort(tid)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PairColumn({
+  matches,
+  pairsOf,
+  side,
+  picks,
+  hasIncoming = false,
+  hasOutgoing = false,
+}: {
+  matches: Matchup[]
+  pairsOf: number
+  side: 'left' | 'right'
+  picks: Picks
+  hasIncoming?: boolean
+  hasOutgoing?: boolean
+}) {
+  const pairs: Matchup[][] = []
+  for (let i = 0; i < matches.length; i += pairsOf) {
+    pairs.push(matches.slice(i, i + pairsOf))
+  }
+  // Each pair fills an equal share of the column (`flex-1`). Inside, two
+  // cells with `justify-around` land at 25% / 75% of the pair height. That
+  // makes pair midpoints land exactly at 50% of each pair slot — which is
+  // where the next round's cell sits in its own pair slot. So cells in
+  // adjacent rounds line up cleanly without any pixel math.
+  return (
+    <div className="flex h-full flex-col">
+      {pairs.map((pair, i) => {
+        const pairClass =
+          hasOutgoing && pair.length > 1
+            ? side === 'left'
+              ? 'bracket-pair-left'
+              : 'bracket-pair-right'
+            : ''
+        return (
+          <div key={i} className={`flex flex-1 flex-col justify-around ${pairClass}`}>
+            {pair.map((m) => (
+              <MatchCellH
+                key={m.id}
+                match={m}
+                picks={picks}
+                side={side}
+                hasIncoming={hasIncoming}
+                hasOutgoing={hasOutgoing}
+              />
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* Display-only horizontal cell. Picks are made in `<KnockoutPicksSection>`
+   above the bracket — Issue B2.
+   `side="center"` is for the Final cell, which receives from both SFs and
+   therefore gets incoming stubs on both edges. */
+function MatchCellH({
+  match,
+  picks,
+  side,
+  hasIncoming = false,
+  hasOutgoing = false,
+}: {
+  match: Matchup
+  picks: Picks
+  side: 'left' | 'right' | 'center'
+  hasIncoming?: boolean
+  hasOutgoing?: boolean
+}) {
+  const top = resolveSide(match.top, picks)
+  const bottom = resolveSide(match.bottom, picks)
+  const ready = Boolean(top && bottom)
+  const odds = ready ? matchupOdds(top as TeamId, bottom as TeamId) : null
+  const winner = picks.winner[match.id] || ''
+  const inClass = hasIncoming
+    ? side === 'center'
+      ? 'bracket-cell-in-left bracket-cell-in-right'
+      : side === 'left'
+        ? 'bracket-cell-in-left'
+        : 'bracket-cell-in-right'
+    : ''
+  const outClass = hasOutgoing
+    ? side === 'left'
+      ? 'bracket-cell-out-left'
+      : side === 'right'
+        ? 'bracket-cell-out-right'
+        : ''
+    : ''
+
+  const renderRow = (id: TeamId | '', fallback: string, pct?: number) => {
+    const picked = id !== '' && winner === id
+    const isResolved = Boolean(id)
+    return (
+      <div
+        className={`flex items-center justify-between gap-1 text-[11px] leading-tight ${
+          picked
+            ? 'text-primary-600 dark:text-primary-400 font-semibold'
+            : isResolved
+              ? 'text-gray-800 dark:text-gray-200'
+              : 'text-gray-400 dark:text-gray-500'
+        }`}
+      >
+        <span className="truncate">{isResolved ? teamShort(id) : fallback}</span>
+        {pct !== undefined && (
+          <span className="text-[10px] text-gray-500 tabular-nums dark:text-gray-400">{pct}%</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      data-side={side}
+      data-match-id={match.id}
+      className={`rounded-md border border-gray-200 bg-white px-1.5 py-1 dark:border-gray-700 dark:bg-gray-900 ${inClass} ${outClass}`}
+    >
+      <div className="text-[9px] tracking-wide text-gray-400 uppercase">{match.id}</div>
+      {renderRow(top, slotShortLabel(match.top), odds?.topPct)}
+      {renderRow(bottom, slotShortLabel(match.bottom), odds?.bottomPct)}
+    </div>
+  )
+}
+
+function CenterColumn({ picks }: { picks: Picks }) {
+  const champion = picks.winner['FINAL']
+  const thirdWinner = picks.winner['THIRD']
+  return (
+    // Final box sits at exact vertical center of the column so its incoming
+    // stubs (`bracket-cell-in-left bracket-cell-in-right`) land at the same
+    // y as the SF cells (which are also at 50% of their columns). Trophy +
+    // "World Champions" label fill the top half; Bronze label + Third-place
+    // box fill the bottom half.
+    <div className="flex h-full flex-col items-stretch">
+      <div className="flex flex-1 flex-col items-center justify-end gap-2 pb-3">
+        <TrophySvg />
+        <div className="text-center text-[10px] font-bold tracking-wider text-gray-700 uppercase dark:text-gray-300">
+          World Champions
+        </div>
+      </div>
+      <div>
+        <MatchCellH match={finalMatch} picks={picks} side="center" hasIncoming />
+        {champion && (
+          <div className="text-primary-600 dark:text-primary-400 mt-1 text-center text-xs font-bold">
+            {teamLabel(champion)}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-start gap-2 pt-3">
+        <div className="text-center text-[10px] font-bold tracking-wider text-gray-700 uppercase dark:text-gray-300">
+          Bronze Winner
+        </div>
+        <div className="w-full">
+          <MatchCellH match={thirdPlaceMatch} picks={picks} side="left" />
+        </div>
+        {thirdWinner && (
+          <div className="text-center text-xs font-semibold text-amber-700 dark:text-amber-400">
+            {teamLabel(thirdWinner)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ---------- footer note ---------------------------------------------- */
 
 function FooterNote() {
   return (
-    <footer className="border-t border-gray-200 pt-6 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+    <footer className="no-print border-t border-gray-200 pt-6 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
       <p>
         Win probabilities use Elo win expectancy:{' '}
         <code className="font-mono text-[0.7rem]">1 / (1 + 10^((Rb − Ra) / 400))</code>.

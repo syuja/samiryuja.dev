@@ -5,20 +5,15 @@
  * the top two teams from each group advance automatically (24 teams), plus
  * the eight best third-place finishers, for 32 teams total.
  *
- * The bracket mapping below uses placeholder slot labels (e.g. "A1", "B2",
- * "3-A/B/E/F" for one of the eight third-place slots). Until the draw, the
- * group rosters and the exact Round-of-32 pairings are illustrative — edit
- * the `groups` and `roundOf32` arrays below to correct seedings or swap in
- * the official pairings once published.
+ * Group rosters reflect the official draw. R32 follows FIFA's 8/4/4 shape:
+ *   - 8 Winner-vs-Third matches
+ *   - 4 Winner-vs-Runner-up matches
+ *   - 4 Runner-up-vs-Runner-up matches
+ * No two group winners face each other in R32.
  *
- * Field reference:
- *  - groups: each group's four-team roster, by `teamId`.
- *  - roundOf32: 16 pairings; each side is either a "GROUP" slot ("A1") or a
- *    "THIRD" slot (one of "3-A/B/E/F", etc.).
- *
- * The team list is the 48 confirmed/projected qualifiers as of the latest
- * FIFA-recognised qualifying round. Replace with the official draw output
- * when available — no component-level changes required.
+ * Each wildcard "THIRD" slot lists the five groups whose third-place team
+ * could land there. The UI enforces global uniqueness across slots so the
+ * same team cannot occupy two slots simultaneously.
  */
 
 export type TeamId = string
@@ -67,16 +62,15 @@ export const teams: Team[] = [
   { id: 'GER', name: 'Germany', short: 'GER', flag: '🇩🇪' },
   { id: 'NED', name: 'Netherlands', short: 'NED', flag: '🇳🇱' },
   { id: 'BEL', name: 'Belgium', short: 'BEL', flag: '🇧🇪' },
-  { id: 'ITA', name: 'Italy', short: 'ITA', flag: '🇮🇹' },
   { id: 'CRO', name: 'Croatia', short: 'CRO', flag: '🇭🇷' },
   { id: 'SUI', name: 'Switzerland', short: 'SUI', flag: '🇨🇭' },
-  { id: 'DEN', name: 'Denmark', short: 'DEN', flag: '🇩🇰' },
   { id: 'AUT', name: 'Austria', short: 'AUT', flag: '🇦🇹' },
-  { id: 'POL', name: 'Poland', short: 'POL', flag: '🇵🇱' },
-  { id: 'SRB', name: 'Serbia', short: 'SRB', flag: '🇷🇸' },
   { id: 'TUR', name: 'Türkiye', short: 'TUR', flag: '🇹🇷' },
   { id: 'NOR', name: 'Norway', short: 'NOR', flag: '🇳🇴' },
-  { id: 'SVN', name: 'Slovenia', short: 'SVN', flag: '🇸🇮' },
+  { id: 'SCO', name: 'Scotland', short: 'SCO', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+  { id: 'SWE', name: 'Sweden', short: 'SWE', flag: '🇸🇪' },
+  { id: 'CZE', name: 'Czechia', short: 'CZE', flag: '🇨🇿' },
+  { id: 'BIH', name: 'Bosnia & Herzegovina', short: 'BIH', flag: '🇧🇦' },
 
   // CONMEBOL
   { id: 'ARG', name: 'Argentina', short: 'ARG', flag: '🇦🇷' },
@@ -93,9 +87,10 @@ export const teams: Team[] = [
   { id: 'ALG', name: 'Algeria', short: 'ALG', flag: '🇩🇿' },
   { id: 'TUN', name: 'Tunisia', short: 'TUN', flag: '🇹🇳' },
   { id: 'CIV', name: "Côte d'Ivoire", short: 'CIV', flag: '🇨🇮' },
-  { id: 'NGA', name: 'Nigeria', short: 'NGA', flag: '🇳🇬' },
   { id: 'GHA', name: 'Ghana', short: 'GHA', flag: '🇬🇭' },
-  { id: 'CMR', name: 'Cameroon', short: 'CMR', flag: '🇨🇲' },
+  { id: 'RSA', name: 'South Africa', short: 'RSA', flag: '🇿🇦' },
+  { id: 'CPV', name: 'Cape Verde', short: 'CPV', flag: '🇨🇻' },
+  { id: 'COD', name: 'DR Congo', short: 'COD', flag: '🇨🇩' },
 
   // AFC
   { id: 'JPN', name: 'Japan', short: 'JPN', flag: '🇯🇵' },
@@ -106,194 +101,259 @@ export const teams: Team[] = [
   { id: 'QAT', name: 'Qatar', short: 'QAT', flag: '🇶🇦' },
   { id: 'UZB', name: 'Uzbekistan', short: 'UZB', flag: '🇺🇿' },
   { id: 'JOR', name: 'Jordan', short: 'JOR', flag: '🇯🇴' },
+  { id: 'IRQ', name: 'Iraq', short: 'IRQ', flag: '🇮🇶' },
 
   // CONCACAF (additional)
-  { id: 'CRC', name: 'Costa Rica', short: 'CRC', flag: '🇨🇷' },
   { id: 'PAN', name: 'Panama', short: 'PAN', flag: '🇵🇦' },
+  { id: 'HAI', name: 'Haiti', short: 'HAI', flag: '🇭🇹' },
+  { id: 'CUW', name: 'Curaçao', short: 'CUW', flag: '🇨🇼' },
 
   // OFC
   { id: 'NZL', name: 'New Zealand', short: 'NZL', flag: '🇳🇿' },
-
-  // Inter-confederation playoff winners (placeholders)
-  { id: 'PO1', name: 'Playoff Winner 1', short: 'PO1', flag: '🏳️' },
-  { id: 'PO2', name: 'Playoff Winner 2', short: 'PO2', flag: '🏳️' },
 ]
 
 /* ---------------------------------------------------------------------- */
 /* Group stage — 12 groups of 4                                           */
 /* ---------------------------------------------------------------------- */
 /**
- * Edit the rosters below freely. The bracket only depends on group IDs and
- * the per-group `teams` order (which is purely for display in the group
- * reference panel). Cascade math reads winners by user pick, not by order.
+ * Group rosters per the official FIFA World Cup 2026 draw. Hosts are listed
+ * first in their group (MEX=A1, CAN=B1, USA=D1) so they read as the seed-1
+ * line in the group panel. Display order has no effect on cascade math —
+ * 1st/2nd/3rd place are user picks.
  */
 export const groups: Group[] = [
-  { id: 'A', teams: ['MEX', 'NOR', 'TUN', 'PO1'] },
-  { id: 'B', teams: ['CAN', 'BEL', 'KOR', 'CRC'] },
-  { id: 'C', teams: ['USA', 'NED', 'JPN', 'PAN'] },
-  { id: 'D', teams: ['ARG', 'POL', 'AUS', 'PO2'] },
-  { id: 'E', teams: ['BRA', 'GER', 'SVN', 'JOR'] },
-  { id: 'F', teams: ['ESP', 'SUI', 'UZB', 'GHA'] },
-  { id: 'G', teams: ['FRA', 'CRO', 'EGY', 'NZL'] },
-  { id: 'H', teams: ['ENG', 'POR', 'IRN', 'CIV'] },
-  { id: 'I', teams: ['ECU', 'SRB', 'NGA', 'QAT'] }, // edit as needed
-  { id: 'J', teams: ['ITA', 'DEN', 'SEN', 'PAR'] }, // edit as needed
-  { id: 'K', teams: ['COL', 'TUR', 'MAR', 'KSA'] },
-  { id: 'L', teams: ['URU', 'AUT', 'ALG', 'CMR'] },
+  { id: 'A', teams: ['MEX', 'RSA', 'KOR', 'CZE'] },
+  { id: 'B', teams: ['CAN', 'BIH', 'QAT', 'SUI'] },
+  { id: 'C', teams: ['BRA', 'MAR', 'HAI', 'SCO'] },
+  { id: 'D', teams: ['USA', 'PAR', 'AUS', 'TUR'] },
+  { id: 'E', teams: ['GER', 'CUW', 'CIV', 'ECU'] },
+  { id: 'F', teams: ['NED', 'JPN', 'SWE', 'TUN'] },
+  { id: 'G', teams: ['BEL', 'EGY', 'IRN', 'NZL'] },
+  { id: 'H', teams: ['ESP', 'CPV', 'KSA', 'URU'] },
+  { id: 'I', teams: ['FRA', 'SEN', 'IRQ', 'NOR'] },
+  { id: 'J', teams: ['ARG', 'ALG', 'AUT', 'JOR'] },
+  { id: 'K', teams: ['POR', 'COD', 'UZB', 'COL'] },
+  { id: 'L', teams: ['ENG', 'CRO', 'GHA', 'PAN'] },
 ]
 
 /* ---------------------------------------------------------------------- */
 /* Round of 32                                                            */
 /* ---------------------------------------------------------------------- */
 /**
- * 16 matches. Sides marked GROUP resolve to the user's first/second-place
- * pick in that group. Sides marked THIRD resolve to the user's pick from
- * the eligible groups for that third-place slot.
+ * 16 matches (FIFA matches 73–88), conforming to FIFA's 8/4/4 structure:
+ *   - 8 Winner-vs-Third (R32-1, 2, 7, 8, 13, 14, 15, 16)
+ *   - 4 Winner-vs-Runner-up (R32-3, 4, 9, 10)
+ *   - 4 Runner-up-vs-Runner-up (R32-5, 6, 11, 12)
+ * No two group winners face each other (no Winner-vs-Winner).
  *
- * The eight third-place slots are: 3-A/B/E/F, 3-A/B/C/D, 3-C/D/E/F,
- * 3-A/B/C/F, 3-A/C/D/E, 3-B/D/F/G, 3-A/E/H/I, 3-C/H/J/L. The exact
- * pairings used here mirror the bracket pictured in the screenshot — edit
- * to swap in FIFA's official Round-of-32 layout once published.
+ * Each THIRD-kind side lists the 5 eligible groups whose third-place team
+ * could fill that wildcard slot. The slot's eligible groups always exclude
+ * the group whose winner is in the same R32 match (a 3rd-place team cannot
+ * face their own group's winner in R32).
+ *
+ * The specific group-letter assignments below are a defensible, structurally
+ * valid template. If you want to mirror FIFA's published bracket more
+ * precisely, edit the individual pairings — they're independent of each
+ * other, so each line is a one-line swap.
  */
 export const roundOf32: Matchup[] = [
-  // Top half
+  // FIFA M73 — Runner-up A vs Runner-up B
   {
     id: 'R32-1',
-    top: { kind: 'GROUP', group: 'A', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-C/E/F/H', eligibleGroups: ['C', 'E', 'F', 'H'] },
+    top: { kind: 'GROUP', group: 'A', place: 2 },
+    bottom: { kind: 'GROUP', group: 'B', place: 2 },
   },
+  // FIFA M74 — Winner E vs 3rd(A/B/C/D/F)
   {
     id: 'R32-2',
-    top: { kind: 'GROUP', group: 'C', place: 2 },
-    bottom: { kind: 'GROUP', group: 'F', place: 2 },
+    top: { kind: 'GROUP', group: 'E', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-A/B/C/D/F',
+      eligibleGroups: ['A', 'B', 'C', 'D', 'F'],
+    },
   },
+  // FIFA M75 — Winner F vs Runner-up C
   {
     id: 'R32-3',
-    top: { kind: 'GROUP', group: 'E', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-A/B/D/H', eligibleGroups: ['A', 'B', 'D', 'H'] },
+    top: { kind: 'GROUP', group: 'F', place: 1 },
+    bottom: { kind: 'GROUP', group: 'C', place: 2 },
   },
+  // FIFA M76 — Winner C vs Runner-up F
   {
     id: 'R32-4',
-    top: { kind: 'GROUP', group: 'B', place: 1 },
-    bottom: { kind: 'GROUP', group: 'H', place: 2 },
+    top: { kind: 'GROUP', group: 'C', place: 1 },
+    bottom: { kind: 'GROUP', group: 'F', place: 2 },
   },
+  // FIFA M77 — Winner I vs 3rd(C/D/F/G/H)
   {
     id: 'R32-5',
-    top: { kind: 'GROUP', group: 'G', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-A/E/J/L', eligibleGroups: ['A', 'E', 'J', 'L'] },
+    top: { kind: 'GROUP', group: 'I', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-C/D/F/G/H',
+      eligibleGroups: ['C', 'D', 'F', 'G', 'H'],
+    },
   },
+  // FIFA M78 — Runner-up E vs Runner-up I
   {
     id: 'R32-6',
-    top: { kind: 'GROUP', group: 'I', place: 2 },
-    bottom: { kind: 'GROUP', group: 'L', place: 2 },
+    top: { kind: 'GROUP', group: 'E', place: 2 },
+    bottom: { kind: 'GROUP', group: 'I', place: 2 },
   },
+  // FIFA M79 — Winner A vs 3rd(C/E/F/H/I)
   {
     id: 'R32-7',
-    top: { kind: 'GROUP', group: 'K', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-D/F/I/L', eligibleGroups: ['D', 'F', 'I', 'L'] },
+    top: { kind: 'GROUP', group: 'A', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-C/E/F/H/I',
+      eligibleGroups: ['C', 'E', 'F', 'H', 'I'],
+    },
   },
+  // FIFA M80 — Winner L vs 3rd(E/H/I/J/K)
   {
     id: 'R32-8',
-    top: { kind: 'GROUP', group: 'J', place: 1 },
-    bottom: { kind: 'GROUP', group: 'L', place: 1 },
+    top: { kind: 'GROUP', group: 'L', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-E/H/I/J/K',
+      eligibleGroups: ['E', 'H', 'I', 'J', 'K'],
+    },
   },
-
-  // Bottom half
+  // FIFA M81 — Winner D vs 3rd(B/E/F/I/J)
   {
     id: 'R32-9',
-    top: { kind: 'GROUP', group: 'F', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-B/C/G/K', eligibleGroups: ['B', 'C', 'G', 'K'] },
+    top: { kind: 'GROUP', group: 'D', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-B/E/F/I/J',
+      eligibleGroups: ['B', 'E', 'F', 'I', 'J'],
+    },
   },
+  // FIFA M82 — Winner G vs 3rd(A/E/H/I/J)
   {
     id: 'R32-10',
-    top: { kind: 'GROUP', group: 'D', place: 2 },
-    bottom: { kind: 'GROUP', group: 'E', place: 2 },
+    top: { kind: 'GROUP', group: 'G', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-A/E/H/I/J',
+      eligibleGroups: ['A', 'E', 'H', 'I', 'J'],
+    },
   },
+  // FIFA M83 — Runner-up K vs Runner-up L
   {
     id: 'R32-11',
-    top: { kind: 'GROUP', group: 'C', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-G/H/I/J', eligibleGroups: ['G', 'H', 'I', 'J'] },
+    top: { kind: 'GROUP', group: 'K', place: 2 },
+    bottom: { kind: 'GROUP', group: 'L', place: 2 },
   },
+  // FIFA M84 — Winner H vs Runner-up J
   {
     id: 'R32-12',
-    top: { kind: 'GROUP', group: 'A', place: 2 },
-    bottom: { kind: 'GROUP', group: 'K', place: 2 },
-  },
-  {
-    id: 'R32-13',
     top: { kind: 'GROUP', group: 'H', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-B/F/I/K', eligibleGroups: ['B', 'F', 'I', 'K'] },
-  },
-  {
-    id: 'R32-14',
-    top: { kind: 'GROUP', group: 'G', place: 2 },
     bottom: { kind: 'GROUP', group: 'J', place: 2 },
   },
+  // FIFA M85 — Winner B vs 3rd(E/F/G/I/J)
+  {
+    id: 'R32-13',
+    top: { kind: 'GROUP', group: 'B', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-E/F/G/I/J',
+      eligibleGroups: ['E', 'F', 'G', 'I', 'J'],
+    },
+  },
+  // FIFA M86 — Winner J vs Runner-up H
+  {
+    id: 'R32-14',
+    top: { kind: 'GROUP', group: 'J', place: 1 },
+    bottom: { kind: 'GROUP', group: 'H', place: 2 },
+  },
+  // FIFA M87 — Winner K vs 3rd(D/E/I/J/L)
   {
     id: 'R32-15',
-    top: { kind: 'GROUP', group: 'D', place: 1 },
-    bottom: { kind: 'THIRD', label: '3-A/C/G/L', eligibleGroups: ['A', 'C', 'G', 'L'] },
+    top: { kind: 'GROUP', group: 'K', place: 1 },
+    bottom: {
+      kind: 'THIRD',
+      label: '3-D/E/I/J/L',
+      eligibleGroups: ['D', 'E', 'I', 'J', 'L'],
+    },
   },
+  // FIFA M88 — Runner-up D vs Runner-up G
   {
     id: 'R32-16',
-    top: { kind: 'GROUP', group: 'I', place: 1 },
-    bottom: { kind: 'GROUP', group: 'B', place: 2 },
+    top: { kind: 'GROUP', group: 'D', place: 2 },
+    bottom: { kind: 'GROUP', group: 'G', place: 2 },
   },
 ]
 
 /* ---------------------------------------------------------------------- */
 /* Round of 16                                                            */
 /* ---------------------------------------------------------------------- */
+// FIFA cross-bracket links M89–M96. R32-N maps to FIFA M(72+N).
 export const roundOf16: Matchup[] = [
+  // M89 — W74 · W77
   {
     id: 'R16-1',
-    top: { kind: 'WINNER', from: 'R32-1' },
-    bottom: { kind: 'WINNER', from: 'R32-2' },
+    top: { kind: 'WINNER', from: 'R32-2' },
+    bottom: { kind: 'WINNER', from: 'R32-5' },
   },
+  // M90 — W73 · W75
   {
     id: 'R16-2',
-    top: { kind: 'WINNER', from: 'R32-3' },
-    bottom: { kind: 'WINNER', from: 'R32-4' },
+    top: { kind: 'WINNER', from: 'R32-1' },
+    bottom: { kind: 'WINNER', from: 'R32-3' },
   },
+  // M91 — W76 · W78
   {
     id: 'R16-3',
-    top: { kind: 'WINNER', from: 'R32-5' },
+    top: { kind: 'WINNER', from: 'R32-4' },
     bottom: { kind: 'WINNER', from: 'R32-6' },
   },
+  // M92 — W79 · W80
   {
     id: 'R16-4',
     top: { kind: 'WINNER', from: 'R32-7' },
     bottom: { kind: 'WINNER', from: 'R32-8' },
   },
+  // M93 — W83 · W84
   {
     id: 'R16-5',
-    top: { kind: 'WINNER', from: 'R32-9' },
-    bottom: { kind: 'WINNER', from: 'R32-10' },
-  },
-  {
-    id: 'R16-6',
     top: { kind: 'WINNER', from: 'R32-11' },
     bottom: { kind: 'WINNER', from: 'R32-12' },
   },
+  // M94 — W81 · W82
+  {
+    id: 'R16-6',
+    top: { kind: 'WINNER', from: 'R32-9' },
+    bottom: { kind: 'WINNER', from: 'R32-10' },
+  },
+  // M95 — W86 · W88
   {
     id: 'R16-7',
-    top: { kind: 'WINNER', from: 'R32-13' },
-    bottom: { kind: 'WINNER', from: 'R32-14' },
+    top: { kind: 'WINNER', from: 'R32-14' },
+    bottom: { kind: 'WINNER', from: 'R32-16' },
   },
+  // M96 — W85 · W87
   {
     id: 'R16-8',
-    top: { kind: 'WINNER', from: 'R32-15' },
-    bottom: { kind: 'WINNER', from: 'R32-16' },
+    top: { kind: 'WINNER', from: 'R32-13' },
+    bottom: { kind: 'WINNER', from: 'R32-15' },
   },
 ]
 
 /* ---------------------------------------------------------------------- */
 /* Quarterfinals                                                          */
 /* ---------------------------------------------------------------------- */
+// FIFA quarterfinals M97–M100.
 export const quarterFinals: Matchup[] = [
+  // M97 — W89 · W90
   { id: 'QF-1', top: { kind: 'WINNER', from: 'R16-1' }, bottom: { kind: 'WINNER', from: 'R16-2' } },
-  { id: 'QF-2', top: { kind: 'WINNER', from: 'R16-3' }, bottom: { kind: 'WINNER', from: 'R16-4' } },
-  { id: 'QF-3', top: { kind: 'WINNER', from: 'R16-5' }, bottom: { kind: 'WINNER', from: 'R16-6' } },
+  // M98 — W93 · W94
+  { id: 'QF-2', top: { kind: 'WINNER', from: 'R16-5' }, bottom: { kind: 'WINNER', from: 'R16-6' } },
+  // M99 — W91 · W92
+  { id: 'QF-3', top: { kind: 'WINNER', from: 'R16-3' }, bottom: { kind: 'WINNER', from: 'R16-4' } },
+  // M100 — W95 · W96
   { id: 'QF-4', top: { kind: 'WINNER', from: 'R16-7' }, bottom: { kind: 'WINNER', from: 'R16-8' } },
 ]
 
