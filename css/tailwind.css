@@ -278,36 +278,64 @@ input:-webkit-autofill:focus {
     text-decoration: none !important;
   }
 
-  /* The normalization rule above wipes pseudo-element backgrounds with
-     `background: transparent !important`, which kills the connector lines
-     (they're drawn purely with background-color on ::before/::after).
-     Re-assert the connector backgrounds here, after the wipe, and force
-     them to print even when the user has "Background graphics" disabled
-     in the browser print dialog. */
-  body[data-print-bracket] .bracket-root [class*='bracket-cell']::before,
-  body[data-print-bracket] .bracket-root [class*='bracket-cell']::after,
-  body[data-print-bracket] .bracket-root [class*='bracket-pair']::before,
-  body[data-print-bracket] .bracket-root [class*='bracket-pair']::after {
-    background-color: #666 !important;
+  /* Darker, slightly bolder borders on the visible print boxes (match cells
+     + group-label cards). The normalization rule above sets every border to
+     #666 / 1px; this rule, placed after it, wins by cascade order. Forced
+     via print-color-adjust so it survives "Background graphics: off" in
+     the print dialog. */
+  body[data-print-bracket] .bracket-root [class*='bracket-cell'],
+  body[data-print-bracket] [data-bracket-horizontal] .rounded-md,
+  body[data-print-bracket] [data-bracket-horizontal] .rounded-lg {
+    border-color: #333 !important;
+    border-width: 1.5px !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  /* Scale the 1360px bracket to fill one landscape page. US Letter
-     landscape at 96dpi minus 0.4" margins gives ~979px usable width;
-     A4 landscape gives ~1045px. 0.72 lands at ~979px wide — fills
-     Letter exactly, fits A4 with ~5% margin. */
-  body[data-print-bracket] [data-bracket-horizontal] {
-    margin: 0 !important;
-    width: 100% !important;
+  /* The normalization rule wipes pseudo-element backgrounds with
+     `background: transparent !important`, which kills the connector lines
+     (they're drawn purely with background-color on ::before/::after).
+     Re-assert the connector backgrounds and thicken them; force them to
+     print even when the user has "Background graphics" disabled. */
+  body[data-print-bracket] .bracket-root [class*='bracket-cell']::before,
+  body[data-print-bracket] .bracket-root [class*='bracket-cell']::after,
+  body[data-print-bracket] .bracket-root [class*='bracket-pair']::before,
+  body[data-print-bracket] .bracket-root [class*='bracket-pair']::after {
+    background-color: #333 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  body[data-print-bracket] [data-bracket-horizontal] > div > div {
-    transform: scale(0.72);
-    transform-origin: top left;
+  body[data-print-bracket] .bracket-root [class*='bracket-cell']::before,
+  body[data-print-bracket] .bracket-root [class*='bracket-cell']::after {
+    height: 1.5px !important;
+  }
+  body[data-print-bracket] .bracket-root [class*='bracket-pair']::before,
+  body[data-print-bracket] .bracket-root [class*='bracket-pair']::after {
+    width: 1.5px !important;
   }
 
-  /* Don't let the bracket wrapper clip the scaled grid. */
-  body[data-print-bracket] [data-bracket-horizontal],
+  /* Center the printed bracket on the page.
+
+     `transform: scale()` shrinks the visual but preserves the original
+     layout box, pinning the bracket to the top-left. `zoom` resizes the
+     real box, so we can flex-center it within a page-height container.
+     Verified one-page fit on Letter landscape at the print dialog's
+     default 100% scaling. */
+  body[data-print-bracket] [data-bracket-horizontal] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  body[data-print-bracket] [data-bracket-horizontal] > div > div {
+    transform: none !important;
+    zoom: 0.72;
+  }
+
+  /* The inner wrapper has overflow-x-auto on screen; neutralize that in
+     print so flex centering isn't disturbed by a phantom scroll context. */
   body[data-print-bracket] [data-bracket-horizontal] > div {
     overflow: visible !important;
   }
