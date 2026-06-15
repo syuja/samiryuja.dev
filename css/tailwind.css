@@ -319,13 +319,19 @@ input:-webkit-autofill:focus {
      `transform: scale()` shrinks the visual but preserves the original
      layout box, pinning the bracket to the top-left. `zoom` resizes the
      real box, so we can flex-center it within a page-height container.
-     Verified one-page fit on Letter landscape at the print dialog's
-     default 100% scaling. */
+
+     `vh` is unreliable in paged media (Chrome's print preview treats it
+     as ~content height, so the flex box collapses and vertical centering
+     fails). A fixed `in` height matches the @page landscape printable
+     area instead. Letter landscape printable ≈ 7.7in; A4 ≈ 7.5in (with
+     the 0.4in @page margins below). 7.2in leaves headroom on both so we
+     don't spill onto a second page. Revisit this number if @page margins
+     change. */
   body[data-print-bracket] [data-bracket-horizontal] {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    min-height: 100vh !important;
+    min-height: 7.2in !important;
     width: 100% !important;
     margin: 0 !important;
   }
