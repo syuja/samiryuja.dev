@@ -19,8 +19,7 @@ import { dirname, resolve } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const src = readFileSync(resolve(here, '../data/tournament-data.ts'), 'utf8')
-const probs = JSON.parse(readFileSync(resolve(here, '../data/probabilities.json'), 'utf8'))
-  .ratings
+const probs = JSON.parse(readFileSync(resolve(here, '../data/probabilities.json'), 'utf8')).ratings
 
 let fails = 0
 const check = (cond, label) => {
@@ -178,10 +177,121 @@ const matchupOdds = (top, bottom) => {
 
 /* ---------- helpers ------------------------------------------------- */
 const setF = (p, k, g, v) => reconcile({ ...p, [k]: { ...p[k], [g]: v } })
-const setSlot = (p, label, v) =>
-  reconcile({ ...p, thirdSlot: { ...p.thirdSlot, [label]: v } })
-const setWinner = (p, id, v) =>
-  reconcile({ ...p, winner: { ...p.winner, [id]: v } })
+const setSlot = (p, label, v) => reconcile({ ...p, thirdSlot: { ...p.thirdSlot, [label]: v } })
+const setWinner = (p, id, v) => reconcile({ ...p, winner: { ...p.winner, [id]: v } })
+
+const ratingFor = (team) => probs[team] ?? 1500
+const chooseFavorite = (top, bottom) => (ratingFor(top) >= ratingFor(bottom) ? top : bottom)
+
+function assignBestThirdSlots(picks) {
+  const slotOptions = thirdSlots.map((slot) => ({
+    label: slot.label,
+    options: slot.eligibleGroups
+      .map((groupId, index) => ({ team: picks.groupThird[groupId], index }))
+      .filter((option) => option.team)
+      .sort((a, b) => ratingFor(b.team) - ratingFor(a.team) || a.index - b.index),
+  }))
+  let bestScore = -Infinity
+  let bestAssignment = null
+
+  const walk = (slotIndex, used, assignment) => {
+    if (slotIndex === slotOptions.length) {
+      const score = Object.values(assignment).reduce(
+        (sum, team) => sum + (team ? ratingFor(team) : 0),
+        0
+      )
+      if (score > bestScore) {
+        bestScore = score
+        bestAssignment = { ...assignment }
+      }
+      return
+    }
+
+    const slot = slotOptions[slotIndex]
+    for (const option of slot.options) {
+      if (used.has(option.team)) continue
+      used.add(option.team)
+      assignment[slot.label] = option.team
+      walk(slotIndex + 1, used, assignment)
+      used.delete(option.team)
+      assignment[slot.label] = ''
+    }
+  }
+
+  walk(0, new Set(), Object.fromEntries(thirdSlots.map((s) => [s.label, ''])))
+  return bestAssignment ?? Object.fromEntries(thirdSlots.map((s) => [s.label, '']))
+}
+
+function buildEloDefaultPicks(bracketName = '') {
+  const next = emptyPicks()
+  next.bracketName = bracketName
+
+  for (const group of groups) {
+    const ordered = [...group.teams].sort((a, b) => {
+      const ratingDelta = ratingFor(b) - ratingFor(a)
+      return ratingDelta || group.teams.indexOf(a) - group.teams.indexOf(b)
+    })
+    next.groupFirst[group.id] = ordered[0]
+    next.groupSecond[group.id] = ordered[1]
+    next.groupThird[group.id] = ordered[2]
+  }
+
+  next.thirdSlot = assignBestThirdSlots(next)
+
+  for (const match of allMatches) {
+    const top = resolveSide(match.top, next)
+    const bottom = resolveSide(match.bottom, next)
+    if (top && bottom) next.winner[match.id] = chooseFavorite(top, bottom)
+  }
+
+  return reconcile(next)
+}
+
+/* ====================================================================
+   TEST 0 — Build a full Elo-default bracket
+   ==================================================================== */
+console.log('\nTest 0: Elo default bracket')
+const elo = buildEloDefaultPicks("Samir's Picks")
+
+check(elo.bracketName === "Samir's Picks", 'Elo defaults preserve bracket name')
+check(
+  groups.every((g) => elo.groupFirst[g.id] && elo.groupSecond[g.id] && elo.groupThird[g.id]),
+  'Elo defaults fill all group-stage picks'
+)
+check(
+  groups.every((g) => {
+    const picks = [elo.groupFirst[g.id], elo.groupSecond[g.id], elo.groupThird[g.id]]
+    return new Set(picks).size === 3
+  }),
+  'Elo defaults do not duplicate teams inside a group'
+)
+check(
+  thirdSlots.every((s) => elo.thirdSlot[s.label]),
+  'Elo defaults fill all wildcard slots'
+)
+check(
+  new Set(Object.values(elo.thirdSlot).filter(Boolean)).size === thirdSlots.length,
+  'Elo defaults use globally-unique wildcard teams'
+)
+check(
+  thirdSlots.every((s) =>
+    s.eligibleGroups.some((groupId) => elo.groupThird[groupId] === elo.thirdSlot[s.label])
+  ),
+  'Elo defaults assign each wildcard team to an eligible slot'
+)
+check(
+  allMatches.every((m) => elo.winner[m.id]),
+  'Elo defaults fill every knockout winner'
+)
+check(
+  allMatches.every((m) => {
+    const top = resolveSide(m.top, elo)
+    const bottom = resolveSide(m.bottom, elo)
+    return top && bottom && elo.winner[m.id] === chooseFavorite(top, bottom)
+  }),
+  'Elo defaults pick the Elo favorite in every resolved knockout match'
+)
+check(Boolean(elo.winner['FINAL']), 'Elo defaults crown a champion')
 
 /* ====================================================================
    TEST 1 — Drive a complete bracket from group stage to Final
@@ -206,9 +316,7 @@ check(
 // honoring global uniqueness (skip a team already assigned elsewhere).
 const used = new Set()
 for (const s of thirdSlots) {
-  const pick = s.eligibleGroups
-    .map((g) => p.groupThird[g])
-    .find((t) => t && !used.has(t))
+  const pick = s.eligibleGroups.map((g) => p.groupThird[g]).find((t) => t && !used.has(t))
   if (pick) {
     p = setSlot(p, s.label, pick)
     used.add(pick)
@@ -259,9 +367,18 @@ for (const round of [roundOf16, quarterFinals, semiFinals]) {
 p = setWinner(p, thirdPlaceMatch.id, resolveSide(thirdPlaceMatch.top, p))
 p = setWinner(p, finalMatch.id, resolveSide(finalMatch.top, p))
 
-check(roundOf16.every((m) => p.winner[m.id]), 'all 8 R16 winners propagated')
-check(quarterFinals.every((m) => p.winner[m.id]), 'all 4 QF winners propagated')
-check(semiFinals.every((m) => p.winner[m.id]), 'both SF winners propagated')
+check(
+  roundOf16.every((m) => p.winner[m.id]),
+  'all 8 R16 winners propagated'
+)
+check(
+  quarterFinals.every((m) => p.winner[m.id]),
+  'all 4 QF winners propagated'
+)
+check(
+  semiFinals.every((m) => p.winner[m.id]),
+  'both SF winners propagated'
+)
 check(Boolean(p.winner['THIRD']), 'third-place winner picked (semifinal loser available)')
 check(Boolean(p.winner['FINAL']), 'final winner picked → champion crowned')
 
@@ -282,8 +399,8 @@ const groupA = groups.find((g) => g.id === 'A')
 const top1A = groupA.teams[0]
 // Make R32-7 winner = 1A (already true), then drive that pick through.
 p = setWinner(p, 'R16-4', top1A) // R16-4.top = winner(R32-7)
-p = setWinner(p, 'QF-3', top1A)  // QF-3.bottom = winner(R16-4)
-p = setWinner(p, 'SF-2', top1A)  // SF-2.bottom = winner(QF-3)
+p = setWinner(p, 'QF-3', top1A) // QF-3.bottom = winner(R16-4)
+p = setWinner(p, 'SF-2', top1A) // SF-2.bottom = winner(QF-3)
 p = setWinner(p, 'FINAL', top1A) // FINAL.bottom = winner(SF-2)
 
 const newFirstA = groupA.teams[3] // pick a different team
@@ -319,10 +436,7 @@ check(q.winner['R32-7'] === gC.teams[2], 'R32-7 winner is the wildcard team')
 
 // Change Group C's 3rd-place pick: slot's team no longer eligible anywhere.
 q = setF(q, 'groupThird', 'C', gC.teams[3])
-check(
-  q.thirdSlot['3-C/E/F/H/I'] === '',
-  'wildcard slot cleared after Group C 3rd-place reassigned'
-)
+check(q.thirdSlot['3-C/E/F/H/I'] === '', 'wildcard slot cleared after Group C 3rd-place reassigned')
 check(q.winner['R32-7'] === '', 'R32-7 winner cleared (slot it depended on is empty)')
 
 /* ====================================================================

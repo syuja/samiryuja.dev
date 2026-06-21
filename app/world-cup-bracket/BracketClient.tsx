@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import confettiFactory from 'canvas-confetti'
+import { useEffect, useState } from 'react'
 import {
   groups,
   roundOf32,
@@ -18,7 +19,7 @@ import {
   type SlotRef,
   type TeamId,
 } from '@/data/tournament-data'
-import { matchupOdds, probabilitySource } from '@/lib/probability'
+import { matchupOdds, probabilitySource, ratingFor } from '@/lib/probability'
 
 /* ---------- state model ----------------------------------------------- */
 
@@ -94,6 +95,76 @@ function reconcile(picks: Picks): Picks {
   return next
 }
 
+function chooseFavorite(top: TeamId, bottom: TeamId): TeamId {
+  return ratingFor(top) >= ratingFor(bottom) ? top : bottom
+}
+
+function assignBestThirdSlots(picks: Picks): Record<string, TeamId | ''> {
+  const slotOptions = thirdSlots.map((slot) => ({
+    label: slot.label,
+    options: slot.eligibleGroups
+      .map((groupId, index) => ({ team: picks.groupThird[groupId], index }))
+      .filter((option): option is { team: TeamId; index: number } => Boolean(option.team))
+      .sort((a, b) => ratingFor(b.team) - ratingFor(a.team) || a.index - b.index),
+  }))
+  let bestScore = -Infinity
+  let bestAssignment: Record<string, TeamId | ''> | null = null
+
+  const walk = (slotIndex: number, used: Set<TeamId>, assignment: Record<string, TeamId | ''>) => {
+    if (slotIndex === slotOptions.length) {
+      const score = Object.values(assignment).reduce(
+        (sum, teamId) => sum + (teamId ? ratingFor(teamId) : 0),
+        0
+      )
+      if (score > bestScore) {
+        bestScore = score
+        bestAssignment = { ...assignment }
+      }
+      return
+    }
+
+    const slot = slotOptions[slotIndex]
+    for (const option of slot.options) {
+      if (used.has(option.team)) continue
+      used.add(option.team)
+      assignment[slot.label] = option.team
+      walk(slotIndex + 1, used, assignment)
+      used.delete(option.team)
+      assignment[slot.label] = ''
+    }
+  }
+
+  walk(0, new Set<TeamId>(), Object.fromEntries(thirdSlots.map((s) => [s.label, ''])))
+  return bestAssignment ?? Object.fromEntries(thirdSlots.map((s) => [s.label, '']))
+}
+
+function buildEloDefaultPicks(bracketName: string): Picks {
+  const next = emptyPicks()
+  next.bracketName = bracketName
+
+  for (const group of groups) {
+    const ordered = [...group.teams].sort((a, b) => {
+      const ratingDelta = ratingFor(b) - ratingFor(a)
+      return ratingDelta || group.teams.indexOf(a) - group.teams.indexOf(b)
+    })
+    next.groupFirst[group.id] = ordered[0]
+    next.groupSecond[group.id] = ordered[1]
+    next.groupThird[group.id] = ordered[2]
+  }
+
+  next.thirdSlot = assignBestThirdSlots(next)
+
+  for (const match of allMatches) {
+    const top = resolveSide(match.top, next)
+    const bottom = resolveSide(match.bottom, next)
+    if (top && bottom) {
+      next.winner[match.id] = chooseFavorite(top, bottom)
+    }
+  }
+
+  return reconcile(next)
+}
+
 /* ---------- helpers --------------------------------------------------- */
 
 const teamLabel = (id: TeamId | ''): string => {
@@ -143,7 +214,6 @@ const selectClass =
 
 export default function BracketClient() {
   const [picks, setPicks] = useState<Picks>(emptyPicks)
-  const lastFinalWinner = useRef<TeamId | ''>('')
 
   const setBracketName = (name: string) => setPicks((p) => ({ ...p, bracketName: name }))
 
@@ -156,18 +226,19 @@ export default function BracketClient() {
   const setThirdSlot = (label: string, teamId: TeamId | '') =>
     setPicks((p) => reconcile({ ...p, thirdSlot: { ...p.thirdSlot, [label]: teamId } }))
 
-  const setWinner = (matchId: string, teamId: TeamId | '') =>
+  const setWinner = (matchId: string, teamId: TeamId | '') => {
     setPicks((p) => reconcile({ ...p, winner: { ...p.winner, [matchId]: teamId } }))
+    if (matchId === 'FINAL' && teamId) {
+      void fireConfetti()
+    }
+  }
+
+  const useEloDefaults = () => {
+    setPicks((p) => buildEloDefaultPicks(p.bracketName))
+    void fireConfetti()
+  }
 
   const finalWinner = picks.winner['FINAL']
-
-  /* Fire confetti only when FINAL transitions from empty → a team. */
-  useEffect(() => {
-    if (finalWinner && finalWinner !== lastFinalWinner.current) {
-      fireConfetti()
-    }
-    lastFinalWinner.current = finalWinner
-  }, [finalWinner])
 
   /* Mark <body> so the print stylesheet can scope rules that hit shared
      layout chrome (header, footer, SectionContainer width) without
@@ -186,6 +257,7 @@ export default function BracketClient() {
         setBracketName={setBracketName}
         finalWinner={finalWinner}
         onReset={() => setPicks(emptyPicks())}
+        onUseEloDefaults={useEloDefaults}
         onPrint={() => window.print()}
       />
 
@@ -230,12 +302,14 @@ function BracketHeader({
   setBracketName,
   finalWinner,
   onReset,
+  onUseEloDefaults,
   onPrint,
 }: {
   bracketName: string
   setBracketName: (v: string) => void
   finalWinner: TeamId | ''
   onReset: () => void
+  onUseEloDefaults: () => void
   onPrint: () => void
 }) {
   const trimmedName = bracketName.trim()
@@ -268,13 +342,20 @@ function BracketHeader({
           </div>
         )}
       </div>
-      <div className="no-print flex items-center gap-2">
+      <div className="no-print flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onReset}
           className="focus-visible:ring-primary-500 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
         >
           Reset
+        </button>
+        <button
+          type="button"
+          onClick={onUseEloDefaults}
+          className="focus-visible:ring-primary-500 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+        >
+          Use Elo defaults
         </button>
         <button
           type="button"
@@ -997,29 +1078,51 @@ function FooterNote() {
 
 /* ---------- confetti ------------------------------------------------- */
 
-async function fireConfetti() {
+function fireConfetti() {
   if (typeof window === 'undefined') return
-  const mod = await import('canvas-confetti')
-  const confetti = mod.default
-  const end = Date.now() + 1200
-  const colors = ['#FFC940', '#A66A00', '#0ea5e9', '#ef4444']
-  ;(function frame() {
-    confetti({
-      particleCount: 5,
-      angle: 60,
-      spread: 70,
-      origin: { x: 0, y: 0.7 },
-      colors,
+  try {
+    const canvas = document.createElement('canvas')
+    Object.assign(canvas.style, {
+      position: 'fixed',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      pointerEvents: 'none',
+      zIndex: '2147483647',
     })
-    confetti({
-      particleCount: 5,
-      angle: 120,
-      spread: 70,
-      origin: { x: 1, y: 0.7 },
-      colors,
-    })
-    if (Date.now() < end) {
-      requestAnimationFrame(frame)
+    document.body.appendChild(canvas)
+
+    const confetti = confettiFactory.create(canvas, { resize: true, useWorker: false })
+    const end = Date.now() + 1200
+    const colors = ['#FFC940', '#A66A00', '#0ea5e9', '#ef4444']
+
+    const cleanup = () => {
+      confetti.reset()
+      canvas.remove()
     }
-  })()
+
+    ;(function frame() {
+      confetti({
+        particleCount: 5,
+        angle: 60,
+        spread: 70,
+        origin: { x: 0, y: 0.7 },
+        colors,
+      })
+      confetti({
+        particleCount: 5,
+        angle: 120,
+        spread: 70,
+        origin: { x: 1, y: 0.7 },
+        colors,
+      })
+      if (Date.now() < end) {
+        requestAnimationFrame(frame)
+      } else {
+        window.setTimeout(cleanup, 700)
+      }
+    })()
+  } catch (error) {
+    console.error('Unable to fire bracket confetti', error)
+  }
 }
