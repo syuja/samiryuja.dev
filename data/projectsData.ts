@@ -14,6 +14,14 @@ const projectsData: Project[] = [
     and information density.`,
     href: '/projects/futbol-report',
   },
+  {
+    title: 'World Cup 2026 Bracket',
+    description: `An interactive FIFA World Cup 2026 prediction bracket with cascading picks,
+    Elo-based default selections, live matchup probabilities, champion celebration,
+    and a one-page printable office-pool sheet.`,
+    href: '/world-cup-bracket',
+    imgSrc: '/static/images/world-cup-horizontal-reference.png',
+  },
 ]
 
 export default projectsData
