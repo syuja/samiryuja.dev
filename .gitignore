@@ -49,3 +49,6 @@ yarn-error.log*
 .env*
 *.swp
 *.swo
+
+# TypeScript
+*.tsbuildinfo

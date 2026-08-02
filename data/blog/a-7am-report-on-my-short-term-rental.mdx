@@ -1,0 +1,216 @@
+---
+title: 'A 7am Report on My Short-Term Rental'
+date: '2026-08-01'
+tags: ['aws-lambda', 'python', 'testing', 'ai-agents', 'hospitable', 'short-term-rental']
+summary: 'Five deterministic checks over a live short-term rental, ranked by severity and delivered to Telegram every morning. What it took to make the alert worth reading, including two bugs it shipped while every test stayed green.'
+images: ['/static/images/hospitable-concierge/hospitable_a.png']
+layout: PostLayout
+draft: false
+canonicalUrl: https://samiryuja.dev/blog/a-7am-report-on-my-short-term-rental/
+---
+
+This is what 7am looks like:
+
+<Image
+  src="/static/images/hospitable-concierge/hospitable_a.png"
+  alt="Telegram digest showing battery status, occupancy for two rooms, and two LOW findings"
+  width={1000}
+  height={430}
+/>
+
+Who's in which room, when they check out, how much battery the front door lock has left, and that two knowledge base topics are duplicated. All of it already sits in the software I use to run the place.
+
+What isn't in there is that message. So I built the thing that writes it.
+
+_(Screenshots use synthetic data to protect guest privacy.)_
+
+## Why
+
+I run a short-term rental: one property, three listings on Hospitable, the whole unit plus two rooms rented separately. My question at 7am is whether there's anything I need to do today, and what to do first. Three things stood between me and the answer.
+
+**Checking cost four screens.** The app, then the inbox, then the calendar, then the devices page, just to establish that nothing was wrong. That was the answer most days. The cost was high enough that I checked less than I should have.
+
+**Nothing was ranked.** A dashboard is a feed, and everything on it carries the same visual weight. A lock at 12% battery and a duplicated FAQ entry look equally urgent. I wanted the triage done before I read it, not while.
+
+**Nothing cross-referenced.** Reservations, inquiries, reviews, and lock state each live on their own screen. Anything that needed two at once, I was assembling in my head.
+
+## How it works
+
+Five pieces:
+
+- **Hospitable API** (the REST API for my property management system, read-only token)
+- **AWS Lambda** (runs the code on a schedule without a server)
+- **EventBridge** (the cron trigger)
+- **AWS SAM** (declares the AWS resources as a template)
+- **Telegram Bot API** (delivery)
+
+<Image
+  src="/static/images/hospitable-concierge/hospitable_concierge_nightly_pipeline.svg"
+  alt="Pipeline diagram: EventBridge scheduler to fetch layer to five checks to formatter to Telegram, with the Hospitable REST API alongside the fetch layer"
+  width={680}
+  height={580}
+/>
+
+There's no LLM anywhere in it, every check is a deterministic rule, and the token has no write scope, so the worst bug I can ship is a wrong message.
+
+One run, start to finish:
+
+**Fetch.** Five endpoints, paginated. The message endpoint allows two requests per minute per reservation, so the client paces itself instead of tripping rate limit errors.
+
+**Check.** Data in, config in, findings out.
+
+| Check                   | Flags                                                   | Severity                     |
+| ----------------------- | ------------------------------------------------------- | ---------------------------- |
+| `unanswered_inquiry`    | Prospective guest asked something and I haven't replied | HIGH, escalating to CRITICAL |
+| `turnover_gap`          | Upcoming check-in stacked close behind a checkout       | CRITICAL down to LOW, by gap |
+| `smartlock_battery`     | Below threshold, unreadable, or device offline          | CRITICAL                     |
+| `actionable_review`     | Review I can still leave, window still open             | MEDIUM                       |
+| `knowledge_hub_hygiene` | Duplicate topics or duplicate entries                   | LOW                          |
+
+A room counts as occupied on the day someone checks out, since the run fires at 7am (`cron(0 11 * * ? *)`, which shifts an hour with daylight saving) and checkout is 11am. And findings deduplicate by device ID, since the front door lock appears on all three listings but is one physical lock.
+
+**Render and send.** Findings sort by severity into the digest.
+
+Two decisions there mattered more than the code:
+
+**Unknown gets flagged. Not-yet doesn't.** If the API won't tell me the lock's battery level, that's a CRITICAL, because a false alarm costs me thirty seconds and a dead lock costs me a guest stuck outside at midnight.
+
+Inquiries run the other way. An inquiry is a question from someone who hasn't booked and probably won't: how far is it from the Capitol, is there parking nearby. Low odds either way, but response rate feeds ranking on the booking platforms, so the ones that cost me are the ones I forget entirely. It flags within a few hours of going unanswered, then escalates if it's still sitting there after a few days.
+
+**Severity is triage, not risk scoring.** I don't need an accurate score, I need to know what to handle first. A duplicated FAQ entry is a real problem and it is permanently LOW, because it will never be the thing I deal with before coffee. Here's a normal Tuesday:
+
+<Image
+  src="/static/images/hospitable-concierge/hospitable_c.png"
+  alt="Telegram digest with one LOW finding and no urgent items"
+  width={1000}
+  height={410}
+/>
+
+One LOW finding, nothing to do. Most mornings look like this, which is exactly why the CRITICAL is worth reading when it shows up:
+
+<Image
+  src="/static/images/hospitable-concierge/hospitable_b.png"
+  alt="Telegram digest with a CRITICAL unanswered inquiry escalation showing a drop-off deadline"
+  width={1000}
+  height={470}
+/>
+
+That's the whole system.
+
+## Moving it onto Lambda
+
+It ran as a CLI script first. Three things had to change.
+
+**The entry point.** Locally, sending is behind a flag so that testing doesn't fire a Telegram message every time:
+
+```python
+if "--notify" in sys.argv:
+    send_digest(text)
+```
+
+Lambda has no command line, so `sys.argv` never contains the flag. Wrapping this entry point as-is would have run cleanly, logged output to CloudWatch, and sent nothing to Telegram, which is the one thing the digest exists to do. Lambda got its own handler instead: calls the pipeline directly, always sends, and skips the dev-only flags entirely.
+
+**The timeout.** Two timeouts were in play, and only one was Lambda's. The function gets 300 seconds, never close. My HTTP client gave each request 20 seconds, and the reservations fetch blew past it when I invoked the deployed function directly:
+
+```bash
+aws lambda invoke --function-name AuditFunction --payload '{}' /dev/stdout
+```
+
+Locally the same call took about 17 seconds, close enough that it had never failed on my machine. I raised the request timeout to 60 seconds and added `ReadTimeout` and `ConnectTimeout` to the retry path, which until then had only caught 429s and 5xx.
+
+**The permission.** The schedule is declared inside the function resource:
+
+```yaml
+AuditFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Handler: hospitable.lambda_handler.handler
+    Runtime: python3.12
+    MemorySize: 512
+    Timeout: 300
+    Events:
+      NightlySchedule:
+        Type: Schedule
+        Properties:
+          Schedule: cron(0 11 * * ? *)
+```
+
+`Events` being nested under the function is how SAM knows what the schedule points at. `NightlySchedule` is just a label for the event, which ends up in the generated rule's name.
+
+Those few lines expand into four AWS resources:
+
+- **Lambda function** (the code itself)
+- **EventBridge rule** (fires daily per the cron schedule above)
+- **IAM execution role** (what the function may do once running)
+- **Lambda permission** (what EventBridge may do _to_ the function)
+
+AWS is deny-by-default, so without that last one the rule exists, points at the function, fires on time, and gets refused, with no error surfacing anywhere you'd think to look.
+
+It ran unattended after that.
+
+## Two bugs it shipped
+
+The digest said the Queen room had a guest checking out Monday. Nobody was in the Queen room.
+
+What it had found was a booking request that expired weeks earlier. Someone asked about the room, never confirmed, and the request timed out.
+
+My code was supposed to skip those. It filtered on `not_accepted`. The API says `not accepted`, with a space, so the filter never matched and an expired request got counted as a guest. Two parts of the code had their own copy of that filter, which is why one bad record caused two problems that looked unrelated. One put a phantom guest in the room list. The other measured the gap between that phantom's checkout and the real reservation behind it, found zero days, and escalated:
+
+<Image
+  src="/static/images/hospitable-concierge/hospitable_d1.png"
+  alt="Digest showing a phantom guest in the Queen room and a false CRITICAL turnover finding"
+  width={1000}
+  height={555}
+/>
+
+That CRITICAL is fictional. There was no tight turnover, because there was no departing guest. Same data, fix applied:
+
+<Image
+  src="/static/images/hospitable-concierge/hospitable_d2.png"
+  alt="Same digest after the fix: Queen shows empty with the real upcoming arrival preserved"
+  width={1000}
+  height={410}
+/>
+
+The phantom is gone and the real arrival behind it survives.
+
+The second bug was the same session and the same mistake. The digest collapses its output depending on whether a listing is the whole unit or a room inside it:
+
+```python
+is_whole_unit = prop.get("parent_child") != "child"
+```
+
+I expected `parent_child` to hold a string like `"parent"`, `"child"`, or absent. The API returns a dict there instead (parent/child relationship metadata, not a label) whenever the field is present at all. A dict never equals the string `"child"`, so the comparison was always true, and every listing on the account rendered as the whole property.
+
+Both times I wrote what I expected the API to return instead of checking what it did, and both had passing tests.
+
+## What I take from it
+
+**Verification isn't validation.** Verification asks whether the code does what I meant it to. Validation asks whether what I meant matches what the API actually returns. My tests only ever checked the first.
+
+A test fixture is my belief about what the API sends, written down. Write the code and the fixture from the same wrong belief and the test passes because of the bug, not despite it, and a model writing both in one pass only makes that more likely. So fixtures now come from recorded responses. Capture a real one, save it, build from that.
+
+**Review by a model that didn't write the code.** A second model reads every diff before commit, cold, with no context on what I intended. It can catch a wrong assumption precisely because it doesn't share it.
+
+**Allowlist, not denylist.** The fix wasn't correcting the string, it was inverting the filter:
+
+```python
+if hdata.res_status(res) != "accepted":
+    continue
+```
+
+A denylist means listing every status that isn't a stay and keeping that list right forever. An allowlist drops whatever it doesn't recognize. For alerting that's the direction you want to be wrong in: a missed alert is one bad morning, but a false CRITICAL every morning teaches me to ignore the channel.
+
+The honest part is that a green test suite is a large part of why I didn't look sooner. The alerts were wrong, I'd half-noticed they were wrong, and the suite said the logic was fine. What moved me was the digest making a claim I could check against physical reality: this room, this guest, this Monday.
+
+## What's next
+
+What exists today is deterministic. A scheduled API pull, five rules, a ranked notification, and no model anywhere in it.
+
+Next is answering rather than flagging. Retrieval over the full history of guest conversations, so it can draft a reply for approval instead of just telling me one is owed. Then clustering the recurring complaints hiding in months of individually forgettable messages, and keeping inference costs sane once there's a model in the loop at all.
+
+The bigger limitation is structural. All of this looks inward. It watches my operation and tells me what to fix, and it structurally cannot tell me why there aren't more bookings in the first place. That's a different problem, and a different tool.
+
+---
+
+_Source: [github.com/syuja/frontdesk](https://github.com/syuja/frontdesk). Read-only auditor over a real short-term rental. Implementation written by Claude Code, reviewed independently before commit, designed and debugged by me. All screenshots use synthetic data._
