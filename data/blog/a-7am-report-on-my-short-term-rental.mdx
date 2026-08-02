@@ -26,13 +26,15 @@ _(Screenshots use synthetic data to protect guest privacy.)_
 
 ## Why
 
-I run a short-term rental: one property, three listings on Hospitable, the whole unit plus two rooms rented separately. My question at 7am is whether there's anything I need to do today, and what to do first. Three things stood between me and the answer.
+I run a short-term rental: one property, three listings on Hospitable, the whole unit plus two rooms rented separately. My question at 7am is whether there's anything I need to do today, and what to do first. Four things stood between me and the answer.
 
 **Checking cost four screens.** The app, then the inbox, then the calendar, then the devices page, just to establish that nothing was wrong. That was the answer most days. The cost was high enough that I checked less than I should have.
 
+**The app doesn't always tell me.** Get logged out, miss an app update, and push notifications stop arriving with no signal that they've stopped. I don't find out something needed attention. I find out nothing did, which isn't the same thing as nothing happening.
+
 **Nothing was ranked.** A dashboard is a feed, and everything on it carries the same visual weight. A lock at 12% battery and a duplicated FAQ entry look equally urgent. I wanted the triage done before I read it, not while.
 
-**Nothing cross-referenced.** Reservations, inquiries, reviews, and lock state each live on their own screen. Anything that needed two at once, I was assembling in my head.
+**Nothing cross-referenced.** Reservations, inquiries, reviews, and lock state each live on their own screen, three or four taps apart, with a load between each one. Anything that needed two at once, I was assembling in my head, half of it spent relocating a screen I'd been on an hour earlier and forgot which corner of the nav it lived in.
 
 ## How it works
 
@@ -55,7 +57,7 @@ There's no LLM anywhere in it, every check is a deterministic rule, and the toke
 
 One run, start to finish:
 
-**Fetch.** Five endpoints, paginated. The message endpoint allows two requests per minute per reservation, so the client paces itself instead of tripping rate limit errors.
+**Fetch.** Five endpoints, paginated. The message endpoint appears to allow two requests per minute per reservation, so the client paces itself instead of tripping rate limit errors.
 
 **Check.** Data in, config in, findings out.
 
@@ -67,15 +69,15 @@ One run, start to finish:
 | `actionable_review`     | Review I can still leave, window still open             | MEDIUM                       |
 | `knowledge_hub_hygiene` | Duplicate topics or duplicate entries                   | LOW                          |
 
-A room counts as occupied on the day someone checks out, since the run fires at 7am (`cron(0 11 * * ? *)`, which shifts an hour with daylight saving) and checkout is 11am. And findings deduplicate by device ID, since the front door lock appears on all three listings but is one physical lock.
+A room counts as occupied on the day someone checks out, since the run fires at 7am (`cron(0 11 * * ? *)`, UTC) and checkout is 11am. And findings deduplicate by device ID, since the front door lock appears on all three listings but is one physical lock.
 
 **Render and send.** Findings sort by severity into the digest.
 
 Two decisions there mattered more than the code:
 
-**Unknown gets flagged. Not-yet doesn't.** If the API won't tell me the lock's battery level, that's a CRITICAL, because a false alarm costs me thirty seconds and a dead lock costs me a guest stuck outside at midnight.
+**Unknown gets flagged.** If the API won't tell me the lock's battery level, that's a CRITICAL, because a false alarm costs me thirty seconds and a dead lock costs me a guest stuck outside at midnight.
 
-Inquiries run the other way. An inquiry is a question from someone who hasn't booked and probably won't: how far is it from the Capitol, is there parking nearby. Low odds either way, but response rate feeds ranking on the booking platforms, so the ones that cost me are the ones I forget entirely. It flags within a few hours of going unanswered, then escalates if it's still sitting there after a few days.
+**Unanswered inquiries.** An inquiry is a question from someone who hasn't booked and probably won't: how far is it from the Capitol, is there parking nearby. Low odds either way, but response rate feeds ranking on the booking platforms, so the ones that cost me are the ones I forget entirely. It flags within a few hours of going unanswered, then escalates if it's still sitting there after a few days.
 
 **Severity is triage, not risk scoring.** I don't need an accurate score, I need to know what to handle first. A duplicated FAQ entry is a real problem and it is permanently LOW, because it will never be the thing I deal with before coffee. Here's a normal Tuesday:
 
@@ -103,20 +105,19 @@ It ran as a CLI script first. Three things had to change.
 
 **The entry point.** Locally, sending is behind a flag so that testing doesn't fire a Telegram message every time:
 
-```python
-if "--notify" in sys.argv:
-    send_digest(text)
+```bash
+uv run -m hospitable --notify
 ```
 
-Lambda has no command line, so `sys.argv` never contains the flag. Wrapping this entry point as-is would have run cleanly, logged output to CloudWatch, and sent nothing to Telegram, which is the one thing the digest exists to do. Lambda got its own handler instead: calls the pipeline directly, always sends, and skips the dev-only flags entirely.
+Lambda has no command line, so `sys.argv` never contains the flag. Wrapping this entry point as-is would have run cleanly, logged output to CloudWatch, and sent nothing to Telegram. That's the one thing the digest exists to do. Lambda got its own handler instead: calls the pipeline directly, always sends, and skips the dev-only flags entirely.
 
-**The timeout.** Two timeouts were in play, and only one was Lambda's. The function gets 300 seconds, never close. My HTTP client gave each request 20 seconds, and the reservations fetch blew past it when I invoked the deployed function directly:
+**The timeout.** Two timeouts were in play, and only one was Lambda's. The function gets 300 seconds, never close. My HTTP client gave each request 20, and the reservations fetch blew past it when I invoked the deployed function directly:
 
 ```bash
 aws lambda invoke --function-name AuditFunction --payload '{}' /dev/stdout
 ```
 
-Locally the same call took about 17 seconds, close enough that it had never failed on my machine. I raised the request timeout to 60 seconds and added `ReadTimeout` and `ConnectTimeout` to the retry path, which until then had only caught 429s and 5xx.
+Locally the same call took about 17 seconds, close enough that it had never failed on my machine. I raised the request timeout to 60 and added `ReadTimeout` and `ConnectTimeout` to the retry path, which until then had only caught 429s and 5xx.
 
 **The permission.** The schedule is declared inside the function resource:
 
@@ -137,7 +138,16 @@ AuditFunction:
 
 `Events` being nested under the function is how SAM knows what the schedule points at. `NightlySchedule` is just a label for the event, which ends up in the generated rule's name.
 
-Those few lines expand into four AWS resources:
+Deploying that template is two commands:
+
+```bash
+sam build
+sam deploy
+```
+
+`sam build` resolves the dependencies and stages everything SAM needs into `.aws-sam/`. `sam deploy` packages that build, uploads it, and applies the CloudFormation changeset: function, EventBridge rule, IAM role, and permission, all four resources in one deploy.
+
+Those few lines in the template expand into four AWS resources:
 
 - **Lambda function** (the code itself)
 - **EventBridge rule** (fires daily per the cron schedule above)
@@ -154,7 +164,7 @@ The digest said the Queen room had a guest checking out Monday. Nobody was in th
 
 What it had found was a booking request that expired weeks earlier. Someone asked about the room, never confirmed, and the request timed out.
 
-My code was supposed to skip those. It filtered on `not_accepted`. The API says `not accepted`, with a space, so the filter never matched and an expired request got counted as a guest. Two parts of the code had their own copy of that filter, which is why one bad record caused two problems that looked unrelated. One put a phantom guest in the room list. The other measured the gap between that phantom's checkout and the real reservation behind it, found zero days, and escalated:
+My code was supposed to skip those. It filtered on `not_accepted`; the API says `not accepted`, with a space. The filter never matched, so an expired request got counted as a guest. Two parts of the code carried their own copy of that filter, so one bad record caused two problems that looked unrelated. One put a phantom guest in the room list. The other measured the gap between that phantom's checkout and the real reservation behind it, found zero days, and escalated:
 
 <Image
   src="/static/images/hospitable-concierge/hospitable_d1.png"
@@ -174,21 +184,19 @@ That CRITICAL is fictional. There was no tight turnover, because there was no de
 
 The phantom is gone and the real arrival behind it survives.
 
-The second bug was the same session and the same mistake. The digest collapses its output depending on whether a listing is the whole unit or a room inside it:
+Same mistake, different field. The digest collapses its output depending on whether a listing is the whole unit or a room inside it:
 
 ```python
 is_whole_unit = prop.get("parent_child") != "child"
 ```
 
-I expected `parent_child` to hold a string like `"parent"`, `"child"`, or absent. The API returns a dict there instead (parent/child relationship metadata, not a label) whenever the field is present at all. A dict never equals the string `"child"`, so the comparison was always true, and every listing on the account rendered as the whole property.
+I expected `parent_child` to hold a string. It's a dict (parent/child relationship metadata, not a label), so the comparison was always true and every listing rendered as the whole property.
 
-Both times I wrote what I expected the API to return instead of checking what it did, and both had passing tests.
+Both bugs are the same shape: I wrote what I expected the API to return, not what it actually returned, and both had passing tests because the tests encoded the same wrong expectation.
 
 ## What I take from it
 
-**Verification isn't validation.** Verification asks whether the code does what I meant it to. Validation asks whether what I meant matches what the API actually returns. My tests only ever checked the first.
-
-A test fixture is my belief about what the API sends, written down. Write the code and the fixture from the same wrong belief and the test passes because of the bug, not despite it, and a model writing both in one pass only makes that more likely. So fixtures now come from recorded responses. Capture a real one, save it, build from that.
+**Verification isn't validation.** My tests checked that the code did what I meant. They never checked that what I meant matched what the API actually sends. A fixture written from the same wrong belief as the code it tests will pass because of the bug, not despite it. Fixtures now come from recorded responses, not memory.
 
 **Review by a model that didn't write the code.** A second model reads every diff before commit, cold, with no context on what I intended. It can catch a wrong assumption precisely because it doesn't share it.
 
@@ -199,7 +207,7 @@ if hdata.res_status(res) != "accepted":
     continue
 ```
 
-A denylist means listing every status that isn't a stay and keeping that list right forever. An allowlist drops whatever it doesn't recognize. For alerting that's the direction you want to be wrong in: a missed alert is one bad morning, but a false CRITICAL every morning teaches me to ignore the channel.
+A denylist has to name every bad status and stay right forever. An allowlist just drops whatever it doesn't recognize, and for alerting that's the direction you want to be wrong in: a missed alert is one bad morning, a false CRITICAL every morning teaches me to ignore the channel.
 
 The honest part is that a green test suite is a large part of why I didn't look sooner. The alerts were wrong, I'd half-noticed they were wrong, and the suite said the logic was fine. What moved me was the digest making a claim I could check against physical reality: this room, this guest, this Monday.
 
