@@ -1,0 +1,163 @@
+---
+title: 'Coach Claude - Gran Fondo Cycling Instructor'
+date: '2026-10-12'
+tags: ['cycling', 'ai', 'claude', 'data']
+draft: false
+summary: "Nine weeks of AI coaching for an 87-mile gran fondo: Zwift workouts, Claude as my coach, how it went, and the lessons I'm taking into next season."
+images: ['/static/images/claude-cycling-coach/weekly-volume.png']
+---
+
+Last year my friend Marco and I rode Gran Fondo Maryland, slowly. This year he wanted to go back and do it better, and I signed up too. Cycling friends are the right people to do stupid things with, like signing up for a gran fondo.
+
+The route is 86.6 miles with 8,300 feet of climbing out of Frederick, and I had nine weeks to train for it. I needed help. I work full time, and I didn't want to follow Zwift's default Gran Fondo plan start to finish. So I hired Claude (Opus 5, on the $20-a-month plan) and started calling it Coach Claude. My Zwift rides sync to Strava, so I downloaded the .fit files from there and handed them over. Its job was to plan my workouts, review my rides, and help me train better.
+
+This is the story of those nine weeks, from the first file I handed over to the finish line.
+
+## Where I started
+
+I came to cycling from running, which had given me knee pain. My friend Ryan suggested cycling as something I could keep doing for decades, and he helped me pick my first equipment. His help mattered, because cycling is hard to start: the gear is expensive, the sport has its own language, and on group rides it's easy to get dropped (left behind). In 2023, Ryan finished Race Across America on a four-rider relay team, coast to coast, so I take his advice seriously.
+
+In July 2024, Ryan and I rode my first gran fondo, the Triple Bypass in Colorado. For the trip from Chicago to Denver, he brought along _The Time-Crunched Cyclist_, which gave me the basics of fueling and workout types. For turning, he looked up a video and landed on SemiPro Cycling's "How to descend really fast, safely." He lent me his Niner for the ride and taught me the traction budget, which he learned riding motorcycles. Your traction budget is 100 points. Brake with 80, and you have 20 left for turning. In the rain, you start with about 80. His advice for a first-timer was simple: stay all the way right, keep the bike upright. The Triple Bypass is still my longest ride.
+
+He also taught me to pace off FTP, the power you can hold for about an hour. That winter, BaseCamp's group training program built on that, and it helped.
+
+Starting with just Claude would have been hard. It didn't build my foundation. It extended one.
+
+## At the desk
+
+### What I gave Coach Claude
+
+This was the whole setup:
+
+- **Bike:** 2021 Cannondale CAAD12, rim brakes
+- **Trainer:** Wahoo Kickr Core, which measures power and cadence
+- **Rides:** Zwift, synced to Strava, exported as .fit files
+- **Coach:** the Claude app (Opus 5, $20 a month)
+- **Race day:** an Apple Watch, no power meter
+
+After a ride, I uploaded the file, and Claude reviewed it the way a coach would: did I hold the targets, how hard was the ride really, and what did it cost me? It also kept a day-by-day log of my training stress, rest days included. That's where the fitness and fatigue numbers below come from. Outdoor rides produced no files, so every fitness, fatigue, and training-stress number in this post is from indoor rides only. I didn't write any code.
+
+A few numbers are worth defining.
+
+**FTP** (Functional Threshold Power) is the most power you can hold for about an hour, and it sets everything else: every training zone and every score is a percentage of it. Nobody actually rides an hour all-out to find it. A ramp test, which is what I did on Zwift, sets FTP at 75% of your best one-minute power. A 20-minute test sets it at 95% of your 20-minute average.
+
+**TSS** (Training Stress Score) measures how hard and how long you rode. One hour at FTP scores 100, and intensity counts squared:
+
+- 1 hour at 75% of FTP ≈ 56
+- 1 hour at 85% of FTP ≈ 72
+- 4 easy hours at 65% of FTP ≈ 169
+
+**Fitness, fatigue, and form** (CTL, ATL, and TSB) I knew from TrainingPeaks. What I didn't know is that they're just two moving averages of TSS, and you can compute them from your own files. Fitness is a 42-day average, fatigue a 7-day average, and form is fitness minus fatigue. None of this is AI: the model goes back to Eric Banister's work in the 1970s, Andrew Coggan's TSS made it practical, and TrainingPeaks made it popular. Claude's part was interpreting it.
+
+The surprise came on August 21. I'd been training on an estimated FTP of 225 watts, and a ramp test put me at 240. Because TSS divides by FTP squared, a higher FTP shrinks every ride's score, past rides included: (225 ÷ 240)² = 0.88, so every ride I'd done was suddenly worth about 12% less. Same rides, same legs, but my fitness number dropped the day my FTP went up. On race day it reads 32.2 on the old yardstick and 28.3 on the new one.
+
+![Line chart of fitness (CTL) over the nine-week block scored two ways: at the 225-watt estimate (dashed gray) and at the tested 240 watts (solid blue). The tested line runs about 12% lower throughout; on the August 21 ramp test it reads 19.5 instead of 22.2, and on race day 28.3 instead of 32.2.](/static/images/claude-cycling-coach/ctl-at-two-ftps.png)
+
+The lesson: read fitness and FTP together. A drop after a higher test means a better yardstick, not lost fitness.
+
+### Picking workouts
+
+Claude's best coaching wasn't a single workout. It was the week. Each day got one job and a few workouts to choose from, hard days had easy days between them, and the long ride was protected. When I was busy or tired, it set priorities: cut the extras first, never the long ride, the climbing day, or tempo.
+
+This is the week it wrote for August 24–29:
+
+| Day | Workout               | Job                         | ERG |
+| --- | --------------------- | --------------------------- | --- |
+| Mon | Easy Hour             | Recover                     | On  |
+| Tue | Low-Cadence Intervals | Climbing strength at 55 rpm | On  |
+| Wed | Tempo #1              | Aerobic durability          | On  |
+| Thu | Rest, or Mend         | Recover                     | On  |
+| Fri | Over-Unders           | Top end                     | Off |
+| Sat | Alpe du Zwift         | Long ride, sustained climb  | Off |
+
+Most weeks had at least four rides.
+
+The challenge was sticking to the plan. A ride at the prescribed watts didn't feel like it counted, so if a workout said 190, I'd hit 220. Six different workouts on paper looked like the same ride in my files. Before late August, my median ride was at 82% of FTP, and over half my rides were at 80% or more, whatever the label said. Riding over target piles up fatigue fast, which I'll get to below.
+
+Two changes fixed that.
+
+**ERG mode.** In ERG, the trainer holds the watts no matter how hard you push. It's a useful training tool: it capped my easy and tempo days, and on low-cadence intervals it left cadence as the only thing to manage. The catch is that you never practice holding a target yourself, and that's the skill a race asks for.
+
+**A real catalog.** Early on, Claude picked Zwift workouts by name without knowing what was inside, or wrote its own intervals. So I asked whether it could use whatsonzwift.com, which lists every Zwift workout step by step. It could, and it started picking workouts whose steps matched the day's job. The first one it found, Low-Cadence Intervals, was inside the Zwift Gran Fondo plan I'd passed on, so I enrolled just to unlock it.
+
+The improvement came from riding what was prescribed. In the final two weeks, my median ride dropped to 73% of FTP. My low-cadence work improved too: before, I spent at most a quarter of each ride between 50 and 70 rpm; after, it was roughly half.
+
+Variety only works if each workout does its own job.
+
+### Adjusting: what watching fatigue taught me
+
+Watching my numbers every day taught me the clearest lesson of the block: riding hard builds fatigue fast and fitness slowly.
+
+Two things cause that. Intensity counts squared, so an hour at 85% of FTP costs about 28% more training stress than the same hour at 75%. And fatigue is a 7-day average while fitness is a 42-day one.
+
+That's what going all out cost me. By the second week, my form (TSB) had dropped to −32, meaning my fatigue was 32 points above my fitness. In plain terms, I was exhausted: sluggish and sleepy all day, and sleeping badly at night. Every time I started to recover, I'd go hard again or add a second ride on an easy day, and knock my form back down. And when I was that tired, the first thing to go was the long ride: the biggest block of time, and the one that needs fresh legs most.
+
+Claude adjusted the plan instead of pushing harder:
+
+- **One session a day.** My worst fatigue spikes came from stacking a second session onto an easy day.
+- **Half the lifting.** Hour-long bodybuilding sessions, four or five hours a week, weren't sustainable alongside riding. Claude cut me from about 95 sets a week to 51, in two or three 40-minute sessions, with every set stopped short of failure and some leg work kept deliberately light so my legs stayed fresh for the bike. That gave me back two to three hours a week.
+- **A later FTP test.** I'd been putting it off, because it feels like an exam and I get nervous. Then Claude told me to wait for fresher legs, since a test that tired would measure my fatigue, not my fitness. It finally happened in week five.
+- **A lower target.** In late August I wanted a fitness score of 55 by race day. Claude ran the math and said there wasn't enough time left to get there without another fatigue crash. I pushed back and asked it to load up the front of the block. It ran the scenarios again and held the line: 44–45 by the start of the taper, with a four-day recovery block built in.
+
+All told, the plan was rewritten four times. I didn't reach 44–45 either, because of the long rides. Claude scheduled them, and we talked about them, but finding long blocks of time in a work week was hard, and some I rode outdoors, where nothing recorded them. In the block, my longest indoor ride was 1:48, and my longest ride of any kind was about three hours, going into a seven-hour day.
+
+The adjustment that landed perfectly was the taper. Five days out, my form was −19. On race morning it was −0.8: the fitness I'd built, with almost none of the fatigue that built it.
+
+![Line chart of fitness (CTL), fatigue (ATL), and form (TSB) across the nine-week block, from measured indoor rides only. Form drops to about −32 by July 31, swings between about −27 and −2 through August and early September, then rises from −19 on September 15 to −0.8 on race day as fatigue falls below fitness. Fitness peaks at 31.2 on September 14. A caption notes that outdoor rides, including the race itself, produced no files and are absent from the series.](/static/images/claude-cycling-coach/training-load.png)
+
+### Making the bike fit the event
+
+I bought my bike, a 2021 Cannondale CAAD12, when I was starting out. It's basically a crit bike, built for short, fast races: light, stiff, and quick. A gran fondo calls for an endurance bike. Long climbs on the CAAD12 were hard work, and after about three hours they got harder.
+
+I knew what good climbing gears felt like from the Triple Bypass. Ryan's Niner was sized for someone three inches taller than me, but it was geared for mountains. So I asked Coach Claude how to make climbs easier on my bike. Its first answer was a new endurance bike. I'm not buying one yet, so it looked at what I could change on mine.
+
+It worked through the gear ratios and started with the cheapest change: smaller chainrings, for about $80. The ratio is chainring teeth divided by cog teeth, and lower is easier.
+
+|        | Chainrings | Easiest gear | Cadence at 150 W on a 6.5% climb |
+| ------ | ---------- | ------------ | -------------------------------- |
+| Before | 52/36      | 1.20         | 56 rpm                           |
+| After  | 48/32      | 1.07         | 63 rpm                           |
+
+As Ryan put it, smaller gears break the effort into smaller chunks. The climb takes the same work, but each pedal stroke is lighter, so you take more of them. Lighter strokes are easier on the leg muscles, so they take longer to start burning. That matters on a long day: legs that are burning at mile 30 still have to get you to the finish. The new easiest gear is 11% lower, and on race day that's about how much easier the climbs felt.
+
+It isn't a complete fix. A wider-range cassette would add bail-out gears for when a climb turns into a grind, but a shop quoted about $450 in parts and labor. The frame is still a race frame, so that money goes toward the next bike.
+
+## On the road
+
+### Race day
+
+Gran Fondo Maryland was 86.6 miles with 8,307 feet of climbing, and it took me about seven hours. Only the five timed sections count toward results, and my combined time on them put me 166th overall. I beat last year's result, on a slightly changed version of the same route.
+
+Claude had written me a race plan in watts. I had a rough idea of it but never actually read it, and without a power meter I couldn't have followed it anyway. I paced by feel, which I'd practiced on rides with ERG off. Feel is a rough gauge: what felt like 200 watts might have been 150. My only instrument was an Apple Watch, which I used to time eating and drinking.
+
+The timing mats are the only race data I have. Compared with the ten riders who finished around me in my age group, my climbing rate went from 8% faster on the first timed climb to 8% slower on the last timed section.
+
+![The Gran Route elevation profile from the top-tube sticker: 86.6 miles and 8,307 feet, with the five timed sections shaded red. T-1 runs from mile 7.1 to 10.5, T-2 from 15.8 to 17.7, T-3 from 29.3 to 31.1, T-4 from 35.3 to 40.8, and T-5, the longest, from 63.3 to 74.8. Aid stations are marked at miles 19.8, 44.8, 62.5 and 75.1.](/static/images/claude-cycling-coach/race-day-sticker.png)
+
+Two things caused that fade. I was tired: I kept my rest stops to a few minutes, and mile 63 came about five hours into the day. And I wasn't racing: with time cutoffs in mind, I rode for a steady total time. Riders around me rested longer and pushed on the timed sections; I'd pass them at the aid stations, and they'd pass me back on the next timed section.
+
+Around mile 62, the sticker on my top tube made the last timed section look brutal: one long red block. I had more to give, but I played it safe. It rode as a long, gradual grind, and reaching the last rest stop at mile 75 meant the hardest part was behind me.
+
+The roads were wet, and organizers were waving riders down through the slick corners. That slowed everyone. In Ryan's terms, I started each descent with about 80 points instead of 100. Descents already scare me, and my bike made them worse: rim brakes lose much of their bite in the wet, and I'd shortened the stem because the frame felt too long, which made the steering twitchy. I backed off on every corner.
+
+My shoulders went numb partway through the race, even though I knew to relax my arms and stand up for a few seconds every so often. My 56 cm frame is too long for me, which may explain it, and my cleats weren't centered. My knee hurt for a few days after the race, probably from the long climbs; it's the same pain that moved me from running to cycling.
+
+## What I'm changing next season
+
+The biggest lesson is in this chart: my weekly training load stayed flat for nine weeks instead of building.
+
+![Bar chart of weekly training stress (TSS) across the nine-week block, from measured indoor rides only: 336, 312, 261, 82, 396, 265, 336, 292, and 58 for the final partial week. The load stays roughly flat with no steady build. The week of August 12 drops to 82 (one ride, six rest days), and the week of August 19 spikes to 396 (eight rides in seven days).](/static/images/claude-cycling-coach/weekly-volume.png)
+
+1. **Build in cycles.** Fitness grows when the load rises a little each week, with an easier week to absorb it: three weeks up, one down. Weekend rides of two to three hours, plus a half-fondo and a century (or a full gran fondo on Zwift) a few weeks before the race. On weekdays, climb first. On the long ride, save the hills for the end.
+2. **Test FTP in week one.** Use the 20-minute test, and repeat the same test every six to eight weeks.
+3. **Get a power meter and a bike computer.** They put outdoor rides in the data and the race targets on the screen. I'll buy used: fall is when people sell their gear.
+4. **Give every day a job, with options.** Do the harder option when I feel strong, and swap days when I'm tired. Use ERG to learn a target, then turn it off.
+5. **Fit before bike.** Center the cleats and get a bike fit first. An endurance frame is on the wishlist.
+6. **Give Claude the catalog and the questions up front.**
+7. **Keep the lifting lean.** Less volume worked, and doing lots of both is getting harder.
+
+Training with Marco made the whole thing better, and I'd do it with him again. My one three-hour ride of the block was with him, around Rock Creek.
+
+Coach Claude took a load off. With a full-time job, I didn't have time to plan every workout, and I didn't need a personal coach, just quick, useful reviews of what I'd ridden. It was worth it. It taught me to read my numbers, built a sensible week, and found an $80 fix for my bike.
+
+Next, I might try an AI bike-fit app, or look at diet and supplements, and see how much faster I can get. In the meantime, I'll keep enjoying the indoor rides.
