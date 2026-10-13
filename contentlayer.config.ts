@@ -109,6 +109,8 @@ export const Blog = defineDocumentType(() => ({
     layout: { type: 'string' },
     bibliography: { type: 'string' },
     canonicalUrl: { type: 'string' },
+    // Optional link to an external discussion thread (e.g. Hacker News, LinkedIn); shown in the post footer only when set.
+    discussion: { type: 'string' },
   },
   computedFields: {
     ...computedFields,

@@ -2,6 +2,7 @@ import { ReactNode } from 'react'
 import { CoreContent } from 'pliny/utils/contentlayer'
 import type { Blog, Authors } from 'contentlayer/generated'
 import Comments from '@/components/Comments'
+import { commentsEnabled } from '@/lib/commentsEnabled'
 import Link from '@/components/Link'
 import PageTitle from '@/components/PageTitle'
 import SectionContainer from '@/components/SectionContainer'
@@ -11,8 +12,28 @@ import siteMetadata from '@/data/siteMetadata'
 import ScrollTopAndComment from '@/components/ScrollTopAndComment'
 
 const editUrl = (path) => `${siteMetadata.siteRepo}/blob/main/data/${path}`
-const discussUrl = (path) =>
-  `https://mobile.twitter.com/search?q=${encodeURIComponent(`${siteMetadata.siteUrl}/${path}`)}`
+
+// Resolves a post's optional `discussion` frontmatter URL to a link label, or
+// null when it's unset, not a valid URL, or not http(s) (e.g. a javascript:
+// URL), in which case nothing is rendered.
+function getDiscussionLink(url?: string): { href: string; label: string } | null {
+  if (!url) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  const host = parsed.hostname
+  const label =
+    host === 'news.ycombinator.com'
+      ? 'Discuss on Hacker News'
+      : host.endsWith('linkedin.com')
+        ? 'Discuss on LinkedIn'
+        : 'Join the discussion'
+  return { href: url, label }
+}
 
 const postDateTemplate: Intl.DateTimeFormatOptions = {
   weekday: 'long',
@@ -30,8 +51,9 @@ interface LayoutProps {
 }
 
 export default function PostLayout({ content, authorDetails, next, prev, children }: LayoutProps) {
-  const { filePath, path, slug, date, title, tags } = content
+  const { filePath, path, slug, date, title, tags, discussion } = content
   const basePath = path.split('/')[0]
+  const discussionLink = getDiscussionLink(discussion)
 
   return (
     <SectionContainer>
@@ -96,13 +118,21 @@ export default function PostLayout({ content, authorDetails, next, prev, childre
             <div className="divide-y divide-gray-200 xl:col-span-3 xl:row-span-2 xl:pb-0 dark:divide-gray-700">
               <div className="prose dark:prose-invert max-w-none pt-10 pb-8">{children}</div>
               <div className="pt-6 pb-6 text-sm text-gray-700 dark:text-gray-300">
-                <Link href={discussUrl(path)} rel="nofollow">
-                  Discuss on Twitter
-                </Link>
-                {` • `}
+                {discussionLink && (
+                  <>
+                    <Link
+                      href={discussionLink.href}
+                      target="_blank"
+                      rel="nofollow noopener noreferrer"
+                    >
+                      {discussionLink.label}
+                    </Link>
+                    {` • `}
+                  </>
+                )}
                 <Link href={editUrl(filePath)}>View on GitHub</Link>
               </div>
-              {siteMetadata.comments && (
+              {commentsEnabled && (
                 <div
                   className="pt-6 pb-6 text-center text-gray-700 dark:text-gray-300"
                   id="comment"
